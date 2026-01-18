@@ -17,9 +17,8 @@ import (
 	"github.com/parfenovvs/lazylogcat/internal/util"
 )
 
-const maxLogLines = 1000
-const batchSize = 1 // TODO increase batch size with introducing timed out batches
-const batchTimeout = 100 * time.Millisecond
+const maxLogLines = 10000
+const batchTimeout = 50 * time.Millisecond
 
 var (
 	titleStyle = func() lipgloss.Style {
@@ -38,6 +37,7 @@ type LogcatViewModel struct {
 	filter        model.Filter
 	format        model.Format
 	log           *util.RingBuffer
+	pendingLogs   []string
 	visualMode    bool
 	currentLine   int
 	startSelected int
@@ -45,8 +45,8 @@ type LogcatViewModel struct {
 	err           error
 }
 
-type logcatBatchMsg struct {
-	Lines []string
+type logcatMsg struct {
+	Line string
 }
 
 type logcatErrorMsg struct {
@@ -55,30 +55,35 @@ type logcatErrorMsg struct {
 
 type logcatConnectedMsg struct{}
 
-func readNextFilteredBatch(m LogcatViewModel) tea.Msg {
-	batch := make([]string, 0, batchSize)
-	for range batchSize {
-		line, err := util.ReadNextLogLine()
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				return nil // End of stream
-			}
-			return logcatErrorMsg{Err: err}
-		}
+type batchTickMsg struct{}
 
-		// Filter empty lines (allowed in long format)
-		if !m.format.Long && strings.Trim(line, "\n\r ") == "" {
-			continue
+func readNext(m LogcatViewModel) tea.Msg {
+	line, err := util.ReadNextLogLine()
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil // End of stream
 		}
-
-		// Filter by text search
-		if m.filter.Text != "" && !strings.Contains(line, m.filter.Text) {
-			continue
-		}
-
-		batch = append(batch, line)
+		slog.Warn("Error reading logcat line", "error", err)
+		return nil
 	}
-	return logcatBatchMsg{Lines: batch}
+
+	// Filter empty lines (allowed in long format)
+	if !m.format.Long && strings.Trim(line, "\n\r ") == "" {
+		return nil
+	}
+
+	// Filter by text search
+	if m.filter.Text != "" && !strings.Contains(line, m.filter.Text) {
+		return nil
+	}
+
+	return logcatMsg{Line: line}
+}
+
+func tickForBatch() tea.Cmd {
+	return tea.Tick(batchTimeout, func(t time.Time) tea.Msg {
+		return batchTickMsg{}
+	})
 }
 
 func New(parentSize model.Size, device model.Device, filter model.Filter, format model.Format) LogcatViewModel {
@@ -248,6 +253,7 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 	case tui.ReconnectLogcatCmd:
 		util.CloseLogcat()
 		m.log = util.NewRingBuffer(maxLogLines)
+		m.pendingLogs = nil
 
 		return m, tea.Batch(
 			func() tea.Msg {
@@ -263,29 +269,36 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		)
 
 	case logcatConnectedMsg:
-		return m, func() tea.Msg {
-			return readNextFilteredBatch(m)
-		}
+		return m, tea.Batch(
+			func() tea.Msg { return readNext(m) },
+			tickForBatch(),
+		)
 
-	case logcatBatchMsg:
+	case logcatMsg:
 		if m.visualMode {
 			return m, nil
 		}
-
-		wasAtBottom := m.viewport.AtBottom()
-
-		for _, line := range msg.Lines {
-			m.log.Append(line + "\n")
-		}
-		m.Render()
-
-		if wasAtBottom {
-			m.viewport.GotoBottom()
-		}
-
+		m.pendingLogs = append(m.pendingLogs, msg.Line)
 		return m, func() tea.Msg {
-			return readNextFilteredBatch(m)
+			return readNext(m)
 		}
+
+	case batchTickMsg:
+		if m.visualMode {
+			return m, nil
+		}
+		if len(m.pendingLogs) > 0 {
+			wasAtBottom := m.viewport.AtBottom()
+			for _, line := range m.pendingLogs {
+				m.log.Append(line + "\n")
+			}
+			m.pendingLogs = nil
+			m.Render()
+			if wasAtBottom {
+				m.viewport.GotoBottom()
+			}
+		}
+		return m, tickForBatch()
 
 	case logcatErrorMsg:
 		m.err = msg.Err
@@ -376,6 +389,9 @@ func (m *LogcatViewModel) ensureLineVisible() {
 
 func (m LogcatViewModel) View() string {
 	if m.err != nil {
+		defer func() {
+			m.err = nil
+		}()
 		slog.Error("Logcat view error", "error", m.err)
 		return fmt.Sprintf("Error: %v\n", m.err)
 	}

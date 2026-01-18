@@ -6,15 +6,12 @@ import (
 	"io"
 	"log/slog"
 	"os/exec"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/parfenovvs/lazylogcat/internal/model"
 )
-
-const initialLogHistorySeconds = 60
 
 var (
 	ErrFailedToGetDevices     = fmt.Errorf("failed to get connected devices")
@@ -81,11 +78,7 @@ func timeDiffInSeconds(start *time.Time, end *time.Time) int {
 }
 
 func ConnectLogcat(deviceId string, filter model.Filter, format model.Format) error {
-	now := time.Now()
-	diff := timeDiffInSeconds(getFirstConnectionTime(), &now)
-	t := max(diff, initialLogHistorySeconds)
-
-	args := []string{"-s", deviceId, "logcat", "-T", strconv.Itoa(t)}
+	args := []string{"-s", deviceId, "logcat", "-T", "1000"}
 
 	if filter.PackageName != "" {
 		pidStr, err := GetPidByPackageName(deviceId, filter.PackageName)
@@ -169,6 +162,7 @@ func ReadNextLogLine() (string, error) {
 
 func CloseLogcat() error {
 	if logcatCmd != nil && logcatCmd.Process != nil {
+		slog.Debug("Killing adb logcat process")
 		logcatCmd.Process.Kill()
 		logcatCmd.Wait()
 		logcatCmd = nil
