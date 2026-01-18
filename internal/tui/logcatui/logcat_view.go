@@ -389,9 +389,6 @@ func (m *LogcatViewModel) ensureLineVisible() {
 
 func (m LogcatViewModel) View() string {
 	if m.err != nil {
-		defer func() {
-			m.err = nil
-		}()
 		slog.Error("Logcat view error", "error", m.err)
 		return fmt.Sprintf("Error: %v\n", m.err)
 	}
