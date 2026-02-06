@@ -11,7 +11,6 @@ import (
 	"github.com/parfenovvs/lazylogcat/internal/tui/theme"
 )
 
-// CommandDialogCloseMsg is emitted when the dialog should close.
 type CommandDialogCloseMsg struct{}
 
 var dialogStyle = func() lipgloss.Style {
@@ -19,31 +18,29 @@ var dialogStyle = func() lipgloss.Style {
 		Padding(1, 2)
 }
 
-// CommandDialogModel is a Bubble Tea component for the command palette dialog.
 type CommandDialogModel struct {
 	table    table.Model
 	skipRows map[int]bool
 }
 
-// NewDialog creates a command dialog that resolves display values from domain inputs.
 func NewDialog(filter model.Filter, format model.Format, softWrap bool) CommandDialogModel {
-	resolveValue := func(cmd Command) string {
+	resolveValue := func(cmd model.Command) string {
 		switch cmd {
-		case CommandPackage:
+		case model.CommandPackage:
 			return filter.PackageName
-		case CommandTag:
+		case model.CommandTag:
 			return filter.Tag
-		case CommandLevel:
+		case model.CommandLevel:
 			lvl := string(filter.Level)
 			if lvl == "" {
-				lvl = "V"
+				lvl = string(model.LvlV)
 			}
 			return lvl
-		case CommandContent:
+		case model.CommandContent:
 			return filter.Text
-		case CommandFormat:
+		case model.CommandFormat:
 			return format.Value()
-		case CommandModifiers:
+		case model.CommandModifiers:
 			mods := format.Modifiers()
 			switch len(mods) {
 			case 0:
@@ -53,7 +50,7 @@ func NewDialog(filter model.Filter, format model.Format, softWrap bool) CommandD
 			default:
 				return fmt.Sprintf("[%d] mods", len(mods))
 			}
-		case CommandToggleWrap:
+		case model.CommandToggleWrap:
 			if softWrap {
 				return "on"
 			}
@@ -71,7 +68,7 @@ func NewDialog(filter model.Filter, format model.Format, softWrap bool) CommandD
 
 	skipRows := make(map[int]bool)
 	var rows []table.Row
-	for i, group := range Commands() {
+	for i, group := range model.Commands() {
 		if i > 0 {
 			skipRows[len(rows)] = true
 			rows = append(rows, table.Row{"", "", ""})
@@ -114,7 +111,6 @@ func NewDialog(filter model.Filter, format model.Format, softWrap bool) CommandD
 	}
 }
 
-// Update handles key messages while the dialog is active.
 func (m CommandDialogModel) Update(msg tea.Msg) (CommandDialogModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -148,7 +144,6 @@ func (m CommandDialogModel) Update(msg tea.Msg) (CommandDialogModel, tea.Cmd) {
 	return m, nil
 }
 
-// View renders the styled dialog box.
 func (m CommandDialogModel) View() string {
 	title := lipgloss.NewStyle().Bold(true).Render("Command List")
 	footer := lipgloss.NewStyle().Foreground(theme.FGHelp).Render("esc to close")

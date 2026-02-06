@@ -1,4 +1,4 @@
-package commandui
+package model
 
 type Command int
 
