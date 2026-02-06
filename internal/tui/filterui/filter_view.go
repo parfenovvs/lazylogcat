@@ -3,6 +3,7 @@ package filterui
 import (
 	"fmt"
 	"log/slog"
+	"maps"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -62,14 +63,36 @@ func New(viewportSize model.Size, deviceId string, filter model.Filter, format m
 		filter:         filter,
 		format:         format,
 		tempFilter:     filter,
-		tempFormat:     format,
+		tempFormat:     cloneFormat(format),
 		packageInput:   pi,
 		tagInput:       tagInput,
 		textInput:      txtInput,
 		activePanel:    0,
-		formatCursor:   getCurrentFormatIndex(&format),
+		formatCursor:   format.FormatIndex(),
 		modifierCursor: 0,
 	}
+}
+
+func cloneFormat(f model.Format) model.Format {
+	return model.Format{
+		SelectedFormat:  f.SelectedFormat,
+		ActiveModifiers: maps.Clone(f.ActiveModifiers),
+	}
+}
+
+func formatsEqual(a, b model.Format) bool {
+	if a.SelectedFormat != b.SelectedFormat {
+		return false
+	}
+	if len(a.ActiveModifiers) != len(b.ActiveModifiers) {
+		return false
+	}
+	for k, v := range a.ActiveModifiers {
+		if b.ActiveModifiers[k] != v {
+			return false
+		}
+	}
+	return true
 }
 
 func (m *FilterViewModel) Exit(apply bool) (bool, error) {
@@ -92,7 +115,7 @@ func (m *FilterViewModel) Exit(apply bool) (bool, error) {
 		m.tempFilter.Text = strings.TrimSpace(m.textInput.Value())
 
 		filterChanged := m.filter != m.tempFilter
-		formatChanged := m.format != m.tempFormat
+		formatChanged := !formatsEqual(m.format, m.tempFormat)
 
 		m.filter = m.tempFilter
 		m.format = m.tempFormat
@@ -141,11 +164,11 @@ func (m FilterViewModel) Update(msg tea.Msg) (FilterViewModel, tea.Cmd) {
 			case "j", "down":
 				switch m.activePanel {
 				case 0:
-					if m.formatCursor < 7 {
+					if m.formatCursor < len(model.AllFormats)-1 {
 						m.formatCursor++
 					}
 				case 1:
-					if m.modifierCursor < 9 {
+					if m.modifierCursor < len(model.AllModifiers)-1 {
 						m.modifierCursor++
 					}
 				}
@@ -163,10 +186,9 @@ func (m FilterViewModel) Update(msg tea.Msg) (FilterViewModel, tea.Cmd) {
 			case " ", "enter":
 				switch m.activePanel {
 				case 0:
-					clearAllFormats(&m.tempFormat)
-					setFormatByIndex(&m.tempFormat, m.formatCursor)
+					m.tempFormat.SetFormatByIndex(m.formatCursor)
 				case 1:
-					toggleModifierByIndex(&m.tempFormat, m.modifierCursor)
+					m.tempFormat.ToggleModifierByIndex(m.modifierCursor)
 				}
 			}
 		}
@@ -293,32 +315,18 @@ func (m FilterViewModel) renderFormatPanel() string {
 
 	b.WriteString(panelTitleStyle.Render("Format") + "\n\n")
 
-	formats := []struct {
-		name  string
-		field string
-	}{
-		{"brief", "brief"},
-		{"long", "long"},
-		{"process", "process"},
-		{"raw", "raw"},
-		{"tag", "tag"},
-		{"thread", "thread"},
-		{"threadtime", "threadtime"},
-		{"time", "time"},
-	}
-
-	for i, fmt := range formats {
-		selected := isFormatSelected(&m.tempFormat, fmt.field)
+	for i, name := range model.AllFormats {
+		selected := m.tempFormat.IsFormatValue(name)
 		cursor := m.activePanel == 0 && m.formatCursor == i
 
-		line := m.renderRadioButton(fmt.name, selected, cursor)
+		line := m.renderRadioButton(name, selected, cursor)
 		b.WriteString(line)
-		if i < len(formats)-1 {
+		if i < len(model.AllFormats)-1 {
 			b.WriteString("\n")
 		}
 	}
 
-	hCompensator := model.MaxModifiers - len(formats)
+	hCompensator := model.MaxModifiers - len(model.AllFormats)
 	for range hCompensator {
 		b.WriteString("\n")
 	}
@@ -346,29 +354,13 @@ func (m FilterViewModel) renderModifierPanel() string {
 
 	b.WriteString(panelTitleStyle.Render("Modifiers") + "\n\n")
 
-	modifiers := []struct {
-		name  string
-		field string
-	}{
-		{"color", "color"},
-		{"descriptive", "descriptive"},
-		{"epoch", "epoch"},
-		{"monotonic", "monotonic"},
-		{"printable", "printable"},
-		{"uid", "uid"},
-		{"usec", "usec"},
-		{"UTC", "UTC"},
-		{"year", "year"},
-		{"zone", "zone"},
-	}
-
-	for i, mod := range modifiers {
-		selected := isModifierSelected(&m.tempFormat, mod.field)
+	for i, name := range model.AllModifiers {
+		selected := m.tempFormat.IsModifierActive(name)
 		cursor := m.activePanel == 1 && m.modifierCursor == i
 
-		line := m.renderCheckbox(mod.name, selected, cursor)
+		line := m.renderCheckbox(name, selected, cursor)
 		b.WriteString(line)
-		if i < len(modifiers)-1 {
+		if i < len(model.AllModifiers)-1 {
 			b.WriteString("\n")
 		}
 	}
@@ -503,137 +495,4 @@ func (m FilterViewModel) renderCheckbox(label string, checked bool, cursor bool)
 	}
 
 	return line
-}
-
-func getCurrentFormatIndex(f *model.Format) int {
-	if f.Brief {
-		return 0
-	}
-	if f.Long {
-		return 1
-	}
-	if f.Process {
-		return 2
-	}
-	if f.Raw {
-		return 3
-	}
-	if f.Tag {
-		return 4
-	}
-	if f.Thread {
-		return 5
-	}
-	if f.Threadtime {
-		return 6
-	}
-	if f.Time {
-		return 7
-	}
-	return 0
-}
-
-func clearAllFormats(f *model.Format) {
-	f.Brief = false
-	f.Long = false
-	f.Process = false
-	f.Raw = false
-	f.Tag = false
-	f.Thread = false
-	f.Threadtime = false
-	f.Time = false
-}
-
-func setFormatByIndex(f *model.Format, i int) {
-	switch i {
-	case 0:
-		f.Brief = true
-	case 1:
-		f.Long = true
-	case 2:
-		f.Process = true
-	case 3:
-		f.Raw = true
-	case 4:
-		f.Tag = true
-	case 5:
-		f.Thread = true
-	case 6:
-		f.Threadtime = true
-	case 7:
-		f.Time = true
-	}
-}
-
-func isFormatSelected(f *model.Format, field string) bool {
-	switch field {
-	case "brief":
-		return f.Brief
-	case "long":
-		return f.Long
-	case "process":
-		return f.Process
-	case "raw":
-		return f.Raw
-	case "tag":
-		return f.Tag
-	case "thread":
-		return f.Thread
-	case "threadtime":
-		return f.Threadtime
-	case "time":
-		return f.Time
-	}
-	return false
-}
-
-func toggleModifierByIndex(f *model.Format, i int) {
-	switch i {
-	case 0:
-		f.Color = !f.Color
-	case 1:
-		f.Descriptive = !f.Descriptive
-	case 2:
-		f.Epoch = !f.Epoch
-	case 3:
-		f.Monotonic = !f.Monotonic
-	case 4:
-		f.Printable = !f.Printable
-	case 5:
-		f.Uid = !f.Uid
-	case 6:
-		f.Usec = !f.Usec
-	case 7:
-		f.UTC = !f.UTC
-	case 8:
-		f.Year = !f.Year
-	case 9:
-		f.Zone = !f.Zone
-	}
-}
-
-func isModifierSelected(f *model.Format, field string) bool {
-	switch field {
-	case "color":
-		return f.Color
-	case "descriptive":
-		return f.Descriptive
-	case "epoch":
-		return f.Epoch
-	case "monotonic":
-		return f.Monotonic
-	case "printable":
-		return f.Printable
-	case "uid":
-		return f.Uid
-	case "usec":
-		return f.Usec
-	case "UTC":
-		return f.UTC
-	case "year":
-		return f.Year
-	case "zone":
-		return f.Zone
-	}
-	return false
 }

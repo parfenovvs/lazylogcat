@@ -17,22 +17,20 @@ import (
 //	raw: no log level
 //	threadtime: "<date> <time> <pid> <tid> I <tag>..."
 func GetLogLevel(line string, format model.Format) string {
-	i := -1
-	switch {
-	case format.Brief, format.Long, format.Tag, format.Time:
-		i = strings.Index(line, "/")
+	switch format.Value() {
+	case "brief", "long", "tag", "time":
+		i := strings.Index(line, "/")
 		if i <= 0 {
 			return ""
 		}
 		return line[i-1 : i]
-	case format.Process, format.Thread:
-		i = strings.Index(line, "(")
-
+	case "process", "thread":
+		i := strings.Index(line, "(")
 		if i <= 0 {
 			return ""
 		}
 		return line[i-1 : i]
-	case format.Threadtime:
+	case "threadtime":
 		parts := strings.Fields(line)
 		if len(parts) < 5 {
 			return ""
@@ -42,16 +40,6 @@ func GetLogLevel(line string, format model.Format) string {
 			return ""
 		}
 		return parts[4]
-	case format.Time:
-		parts := strings.Fields(line)
-		if len(parts) < 3 {
-			return ""
-		}
-		l := strings.Split(parts[2], "/")
-		if len(l) == 0 || len(l[0]) != 1 {
-			return ""
-		}
-		return l[0]
 	}
 	return ""
 }

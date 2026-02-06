@@ -79,7 +79,7 @@ func readNext(m LogcatViewModel) tea.Msg {
 	}
 
 	// Filter empty lines (allowed in long format)
-	if !m.format.Long && strings.Trim(line, "\n\r ") == "" {
+	if !m.format.IsFormatValue("long") && strings.Trim(line, "\n\r ") == "" {
 		return logcatEmptyMsg{}
 	}
 
@@ -254,7 +254,7 @@ func (m *LogcatViewModel) Render() {
 				continue
 			}
 		}
-		if m.format.Color {
+		if m.format.IsModifierActive("color") {
 			line := strings.TrimSuffix(msg, "\n")
 			style := lipgloss.NewStyle().
 				Foreground(theme.GetLogColor(util.GetLogLevel(line, m.format)))
@@ -464,7 +464,6 @@ func (m LogcatViewModel) renderBaseView() string {
 	)
 }
 
-
 func (m LogcatViewModel) View() string {
 	if m.err != nil {
 		slog.Error("Logcat view error", "error", m.err)
@@ -500,40 +499,8 @@ func (m LogcatViewModel) headerView() string {
 	}
 
 	format := m.format.Value()
-	var mods []string
+	mods := m.format.Modifiers()
 	var modsStr string
-
-	if m.format.Color {
-		mods = append(mods, "color")
-	}
-	if m.format.Descriptive {
-		mods = append(mods, "descriptive")
-	}
-	if m.format.Epoch {
-		mods = append(mods, "epoch")
-	}
-	if m.format.Monotonic {
-		mods = append(mods, "monotonic")
-	}
-	if m.format.Printable {
-		mods = append(mods, "printable")
-	}
-	if m.format.Uid {
-		mods = append(mods, "uid")
-	}
-	if m.format.Usec {
-		mods = append(mods, "usec")
-	}
-	if m.format.UTC {
-		mods = append(mods, "UTC")
-	}
-	if m.format.Year {
-		mods = append(mods, "year")
-	}
-	if m.format.Zone {
-		mods = append(mods, "zone")
-	}
-
 	if len(mods) > 0 {
 		modsStr = fmt.Sprintf(" | %s", strings.Join(mods, ","))
 	}

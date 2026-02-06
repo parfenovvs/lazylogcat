@@ -74,7 +74,7 @@ func ConnectLogcat(deviceId string, filter model.Filter, format model.Format) er
 		}
 	}
 
-	if format != (model.Format{}) {
+	if !format.IsEmpty() {
 		args = append(args, "-v")
 		var formats []string
 
