@@ -8,11 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/x/ansi"
 	"github.com/parfenovvs/lazylogcat/internal/model"
 	"github.com/parfenovvs/lazylogcat/internal/tui"
 	"github.com/parfenovvs/lazylogcat/internal/tui/commandui"
@@ -28,10 +26,6 @@ var (
 		return theme.Panel().
 			Padding(0, 1)
 	}()
-	dialogStyle = func() lipgloss.Style {
-		return theme.ActivePanel().
-			Padding(1, 2)
-	}
 
 	helpTextNormal = "ctrl+f filters • ctrl+r reconnect • ctrl+d devices • W toggle wrap • L toggle level • G jump to recent • C clear • v visual"
 	helpTextVisual = "j/↓ down • k/↑ up • V select multiple • y copy • esc exit visual"
@@ -51,8 +45,7 @@ type LogcatViewModel struct {
 	softWrap          bool
 	err               error
 	showCommandDialog bool
-	commandTable      table.Model
-	commandSkipRows   map[int]bool
+	commandDialog     commandui.CommandDialogModel
 }
 
 type logcatMsg struct {
@@ -144,6 +137,10 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		m.viewport.Width = m.parentSize.Width
 		m.viewport.Height = m.parentSize.Height - footerHeight - headerHeight - 1
 		needsRender = true
+
+	case commandui.CommandDialogCloseMsg:
+		m.showCommandDialog = false
+		return m, nil
 
 	case tea.KeyMsg:
 		result := m.handleKeyMsg(msg)
@@ -282,34 +279,11 @@ func (m *LogcatViewModel) Render() {
 func (m *LogcatViewModel) handleKeyMsg(msg tea.KeyMsg) updateResult {
 	key := msg.String()
 
-	// When command dialog is open, capture all keys
+	// When command dialog is open, delegate all keys to the dialog
 	if m.showCommandDialog {
-		if key == "ctrl+p" || key == "esc" {
-			m.showCommandDialog = false
-			return updateResult{needsRender: true}
-		}
-		prevCursor := m.commandTable.Cursor()
-		m.commandTable, _ = m.commandTable.Update(msg)
-		newCursor := m.commandTable.Cursor()
-
-		if m.commandSkipRows[newCursor] && newCursor != prevCursor {
-			dir := 1
-			if newCursor < prevCursor {
-				dir = -1
-			}
-			rowCount := len(m.commandTable.Rows())
-			target := newCursor + dir
-			for target >= 0 && target < rowCount && m.commandSkipRows[target] {
-				target += dir
-			}
-			if target >= 0 && target < rowCount {
-				m.commandTable.SetCursor(target)
-			} else {
-				m.commandTable.SetCursor(prevCursor)
-			}
-		}
-
-		return updateResult{}
+		var cmd tea.Cmd
+		m.commandDialog, cmd = m.commandDialog.Update(msg)
+		return updateResult{cmd: cmd}
 	}
 
 	// Try global keys first (work in both modes)
@@ -382,10 +356,8 @@ func (m *LogcatViewModel) handleNormalModeKey(key string) updateResult {
 		return updateResult{needsRender: true}
 
 	case "ctrl+p":
-		m.showCommandDialog = !m.showCommandDialog
-		if m.showCommandDialog {
-			m.commandTable, m.commandSkipRows = newCommandTable(m.filter, m.format, m.softWrap)
-		}
+		m.showCommandDialog = true
+		m.commandDialog = commandui.NewDialog(m.filter, m.format, m.softWrap)
 		return updateResult{needsRender: true}
 	}
 
@@ -492,218 +464,6 @@ func (m LogcatViewModel) renderBaseView() string {
 	)
 }
 
-func (m LogcatViewModel) overlayDialog(baseView, dialog string) string {
-	// Ensure base view fills the entire parent size
-	background := lipgloss.Place(
-		m.parentSize.Width,
-		m.parentSize.Height,
-		lipgloss.Left,
-		lipgloss.Top,
-		baseView,
-	)
-
-	// Split background into lines
-	bgLines := strings.Split(background, "\n")
-
-	// Calculate dialog dimensions
-	dialogLines := strings.Split(dialog, "\n")
-	dialogHeight := len(dialogLines)
-	dialogWidth := 0
-	for _, line := range dialogLines {
-		w := ansi.StringWidth(line)
-		if w > dialogWidth {
-			dialogWidth = w
-		}
-	}
-
-	// Calculate center position
-	x := (m.parentSize.Width - dialogWidth) / 2
-	y := (m.parentSize.Height - dialogHeight) / 2
-
-	// Ensure we don't go out of bounds
-	if y < 0 {
-		y = 0
-	}
-	if x < 0 {
-		x = 0
-	}
-
-	// Overlay dialog onto background
-	var result strings.Builder
-	for i := 0; i < len(bgLines); i++ {
-		// Check if this line should have dialog content overlaid
-		dialogLineIdx := i - y
-		if dialogLineIdx >= 0 && dialogLineIdx < dialogHeight {
-			// This line needs dialog overlay
-			bgLine := bgLines[i]
-			dialogLine := dialogLines[dialogLineIdx]
-
-			// Overlay the dialog line at position x
-			overlaidLine := m.overlayLine(bgLine, dialogLine, x)
-			result.WriteString(overlaidLine)
-		} else {
-			// No overlay needed, use background as-is
-			result.WriteString(bgLines[i])
-		}
-
-		if i < len(bgLines)-1 {
-			result.WriteString("\n")
-		}
-	}
-
-	return result.String()
-}
-
-// overlayLine overlays foreground onto background at position x (in visual character positions)
-func (m LogcatViewModel) overlayLine(background, foreground string, x int) string {
-	bgWidth := ansi.StringWidth(background)
-	fgWidth := ansi.StringWidth(foreground)
-
-	// If the overlay position is beyond the background width, just return background
-	if x >= bgWidth {
-		return background
-	}
-
-	// Truncate background to make space for foreground, then append foreground and remainder
-	// We need to work with visual positions, not byte positions
-	var result strings.Builder
-
-	// Add the part before the overlay (0 to x)
-	if x > 0 {
-		prefix := ansi.Truncate(background, x, "")
-		result.WriteString(prefix)
-	}
-
-	// Add the foreground
-	result.WriteString(foreground)
-
-	// Add the part after the overlay
-	endPos := x + fgWidth
-	if endPos < bgWidth {
-		// We need to skip the first 'endPos' characters and take the rest
-		// Since ansi.Truncate doesn't support offset, we'll do a simpler approach:
-		// Just pad if needed, as the dialog will cover the middle part
-		remaining := bgWidth - endPos
-		if remaining > 0 {
-			result.WriteString(strings.Repeat(" ", remaining))
-		}
-	}
-
-	return result.String()
-}
-
-func truncateMiddle(s string, maxWidth int) string {
-	w := ansi.StringWidth(s)
-	if w <= maxWidth {
-		return s
-	}
-	// Reserve 1 char for the ellipsis
-	left := (maxWidth - 1) / 2
-	right := maxWidth - 1 - left
-
-	// Take `right` visual-width chars from the end
-	runes := []rune(s)
-	var suffix string
-	suffixW := 0
-	for i := len(runes) - 1; i >= 0 && suffixW < right; i-- {
-		suffixW++
-		suffix = string(runes[i]) + suffix
-	}
-
-	return ansi.Truncate(s, left, "") + "…" + suffix
-}
-
-func newCommandTable(filter model.Filter, format model.Format, softWrap bool) (table.Model, map[int]bool) {
-	columns := []table.Column{
-		{Title: "", Width: 16},
-		{Title: "", Width: 10},
-		{Title: "", Width: 10},
-	}
-
-	resolveValue := func(cmd commandui.Command) string {
-		switch cmd {
-		case commandui.CommandPackage:
-			return filter.PackageName
-		case commandui.CommandTag:
-			return filter.Tag
-		case commandui.CommandLevel:
-			lvl := string(filter.Level)
-			if lvl == "" {
-				lvl = "V"
-			}
-			return lvl
-		case commandui.CommandContent:
-			return filter.Text
-		case commandui.CommandFormat:
-			return format.Value()
-		case commandui.CommandModifiers:
-			mods := format.Modifiers()
-			switch len(mods) {
-			case 0:
-				return ""
-			case 1:
-				return mods[0]
-			default:
-				return fmt.Sprintf("[%d] mods", len(mods))
-			}
-		case commandui.CommandToggleWrap:
-			if softWrap {
-				return "on"
-			}
-			return "off"
-		default:
-			return ""
-		}
-	}
-
-	skipRows := make(map[int]bool)
-	var rows []table.Row
-	for i, group := range commandui.Commands() {
-		if i > 0 {
-			skipRows[len(rows)] = true
-			rows = append(rows, table.Row{"", "", ""})
-		}
-		skipRows[len(rows)] = true
-		groupName := lipgloss.NewStyle().Bold(true).Render(group.Name)
-		rows = append(rows, table.Row{groupName, "", ""})
-		for _, cmd := range group.Commands {
-			value := truncateMiddle(resolveValue(cmd.Command), 10)
-			rows = append(rows, table.Row{cmd.Name, value, cmd.Shortcut})
-		}
-	}
-
-	km := table.DefaultKeyMap()
-	km.GotoTop.SetEnabled(false)
-	km.GotoBottom.SetEnabled(false)
-	km.HalfPageUp.SetEnabled(false)
-	km.HalfPageDown.SetEnabled(false)
-	km.PageDown.SetEnabled(false)
-
-	s := table.Styles{
-		Header:   lipgloss.NewStyle(),
-		Cell:     lipgloss.NewStyle().Padding(0, 1),
-		Selected: lipgloss.NewStyle().Bold(true).Foreground(theme.FGSelected).Background(theme.BGCursor),
-	}
-
-	t := table.New(
-		table.WithColumns(columns),
-		table.WithRows(rows),
-		table.WithHeight(len(rows)),
-		table.WithFocused(true),
-		table.WithKeyMap(km),
-	)
-	t.SetStyles(s)
-	t.SetCursor(1) // Skip the first group header
-
-	return t, skipRows
-}
-
-func (m LogcatViewModel) renderDialog() string {
-	title := lipgloss.NewStyle().Bold(true).Render("Command List")
-	footer := lipgloss.NewStyle().Foreground(theme.FGHelp).Render("esc to close")
-	content := title + "\n" + m.commandTable.View() + "\n" + footer
-	return dialogStyle().Render(content)
-}
 
 func (m LogcatViewModel) View() string {
 	if m.err != nil {
@@ -715,8 +475,8 @@ func (m LogcatViewModel) View() string {
 
 	if m.showCommandDialog {
 		dimmedBaseView := tui.DimView(baseView)
-		dialogContent := m.renderDialog()
-		return m.overlayDialog(dimmedBaseView, dialogContent)
+		dialogContent := m.commandDialog.View()
+		return tui.OverlayDialog(m.parentSize, dimmedBaseView, dialogContent)
 	}
 
 	return baseView
