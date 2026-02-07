@@ -315,6 +315,100 @@ func TestLoadConfig_ErrorCases(t *testing.T) {
 	})
 }
 
+func TestSaveConfig(t *testing.T) {
+	tests := []struct {
+		name   string
+		config Config
+	}{
+		{
+			name:   "DefaultConfig",
+			config: DefaultConfig(),
+		},
+		{
+			name: "CustomConfig",
+			config: Config{
+				Prefs: Prefs{
+					Format:    "brief",
+					Modifiers: []string{"color", "epoch"},
+				},
+				Session: Session{
+					DeviceId: "emulator-5554",
+					Pkg:      "com.example.app",
+					Tag:      "MyTag",
+					Txt:      "error",
+				},
+			},
+		},
+		{
+			name: "EmptySession",
+			config: Config{
+				Prefs: Prefs{
+					Format:    "time",
+					Modifiers: []string{"color"},
+				},
+				Session: Session{},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			path := filepath.Join(tempDir, "export.json")
+
+			err := Save(tt.config, path)
+			if err != nil {
+				t.Fatalf("Save() error = %v, want nil", err)
+			}
+
+			// Read back and verify
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("Failed to read saved file: %v", err)
+			}
+
+			var got Config
+			if err := json.Unmarshal(data, &got); err != nil {
+				t.Fatalf("Failed to unmarshal saved file: %v", err)
+			}
+
+			compareConfigs(t, got, tt.config)
+		})
+	}
+}
+
+func TestSaveConfig_ErrorCases(t *testing.T) {
+	t.Run("InvalidPath", func(t *testing.T) {
+		err := Save(DefaultConfig(), "/nonexistent/dir/config.json")
+		if err == nil {
+			t.Error("Save() with invalid path error = nil, want error")
+		}
+	})
+}
+
+func TestSaveConfig_PrettyJSON(t *testing.T) {
+	tempDir := t.TempDir()
+	path := filepath.Join(tempDir, "export.json")
+
+	err := Save(DefaultConfig(), path)
+	if err != nil {
+		t.Fatalf("Save() error = %v, want nil", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("Failed to read saved file: %v", err)
+	}
+
+	content := string(data)
+	if !strings.Contains(content, "\n") {
+		t.Error("Save() output is not indented, expected pretty-printed JSON")
+	}
+	if !strings.Contains(content, "  ") {
+		t.Error("Save() output missing indentation")
+	}
+}
+
 func TestConfig_JSONFieldNames(t *testing.T) {
 	// Verify JSON tag mappings are correct
 	t.Run("PrefsJSONTags", func(t *testing.T) {

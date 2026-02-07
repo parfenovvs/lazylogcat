@@ -51,6 +51,18 @@ func (c *Config) String() string {
 	return string(data)
 }
 
+// Save writes the configuration to a JSON file at the given path.
+func Save(cfg Config, path string) error {
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+	return nil
+}
+
 // Load reads the configuration from the provided file.
 // If the file is invalid or cannot be read, it returns a default configuration and an error.
 func Load(file *os.File) (Config, error) {
