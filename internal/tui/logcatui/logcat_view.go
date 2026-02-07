@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/parfenovvs/lazylogcat/internal/model"
 	"github.com/parfenovvs/lazylogcat/internal/tui"
@@ -616,34 +617,7 @@ func (m LogcatViewModel) View() string {
 }
 
 func (m LogcatViewModel) headerView() string {
-	var filters []string
-	if !m.filter.IsEmpty() {
-		if m.filter.PackageName != "" {
-			filters = append(filters, fmt.Sprintf("pkg:%s", m.filter.PackageName))
-		}
-		if m.filter.Level != "" && m.filter.Level != model.LvlV {
-			filters = append(filters, fmt.Sprintf("level:%s", m.filter.Level))
-		}
-		if m.filter.Tag != "" {
-			filters = append(filters, fmt.Sprintf("tag:%s", m.filter.Tag))
-		}
-		if m.filter.Text != "" {
-			filters = append(filters, fmt.Sprintf("text:%s", m.filter.Text))
-		}
-	}
-
-	format := m.format.Value()
-	mods := m.format.Modifiers()
-	var modsStr string
-	if len(mods) > 0 {
-		modsStr = fmt.Sprintf(" | %s", strings.Join(mods, ","))
-	}
-
-	filtersStr := ""
-	if len(filters) > 0 {
-		filtersStr = fmt.Sprintf("\n%s", strings.Join(filters, " | "))
-	}
-
+	// Build device label
 	var name string
 	if m.device != nil {
 		name = m.device.Name
@@ -652,36 +626,66 @@ func (m LogcatViewModel) headerView() string {
 	}
 	deviceName := lipgloss.NewStyle().Bold(true).Render(name)
 
-	leftContent := fmt.Sprintf("%s | %s%s", deviceName, format, modsStr)
+	// Build filter parts: package, tag, content (text), log level
+	var filters []string
+	if m.filter.PackageName != "" {
+		filters = append(filters, fmt.Sprintf("pkg:%s", m.filter.PackageName))
+	}
+	if m.filter.Tag != "" {
+		filters = append(filters, fmt.Sprintf("tag:%s", m.filter.Tag))
+	}
+	if m.filter.Text != "" {
+		filters = append(filters, fmt.Sprintf("text:%s", m.filter.Text))
+	}
+	if m.filter.Level != "" && m.filter.Level != model.LvlV {
+		filters = append(filters, fmt.Sprintf("level:%s", string(m.filter.Level)))
+	}
 
-	// lipgloss Width sets the inner content width; border (2) + padding (2) = 4 chars overhead
+	// Compose single-line header content
+	headerContent := deviceName
+	if len(filters) > 0 {
+		headerContent = fmt.Sprintf("%s: %s", deviceName, strings.Join(filters, " | "))
+	}
+
+	// border (2) + padding (2) = 4 chars horizontal overhead
+	innerWidth := m.viewport.Width - 4
 	style := titleStyle.Width(m.viewport.Width - 2)
 
-	// When the toast is visible, place it right-aligned on the first line.
-	// The border (2) + padding (2) = 4 chars of horizontal overhead.
+	// Toast has higher priority: reserve space for it first, then truncate header content
 	toastStr := m.toast.View()
 	if toastStr != "" {
-		innerWidth := m.viewport.Width - 4
-		leftWidth := lipgloss.Width(leftContent)
-		rightWidth := innerWidth - leftWidth
-		if rightWidth > 0 {
-			rightPart := lipgloss.NewStyle().
-				Width(rightWidth).
-				AlignHorizontal(lipgloss.Right).
-				Render(toastStr)
-			firstLine := leftContent + rightPart
-			return style.Render(firstLine + filtersStr)
+		toastWidth := ansi.StringWidth(toastStr)
+		gap := 2 // spacing between header content and toast
+		contentMaxWidth := innerWidth - toastWidth - gap
+
+		if contentMaxWidth > 3 {
+			if ansi.StringWidth(headerContent) > contentMaxWidth {
+				headerContent = ansi.Truncate(headerContent, contentMaxWidth-3, "...")
+			}
+		} else {
+			headerContent = ""
+		}
+
+		// Compose line: left-aligned header content + right-aligned toast
+		headerWidth := ansi.StringWidth(headerContent)
+		rightWidth := innerWidth - headerWidth
+		rightPart := lipgloss.NewStyle().
+			Width(rightWidth).
+			AlignHorizontal(lipgloss.Right).
+			Render(toastStr)
+		return style.Render(headerContent + rightPart)
+	}
+
+	// No toast: truncate header content if needed
+	if ansi.StringWidth(headerContent) > innerWidth {
+		if innerWidth > 3 {
+			headerContent = ansi.Truncate(headerContent, innerWidth-3, "...")
+		} else {
+			headerContent = ansi.Truncate(headerContent, innerWidth, "")
 		}
 	}
 
-	headerText := style.Render(fmt.Sprintf("%s%s", leftContent, filtersStr))
-	width := lipgloss.Width(headerText)
-
-	if width > m.viewport.Width {
-		headerText = style.Render(fmt.Sprintf("%s | ...", deviceName))
-	}
-
-	return headerText
+	return style.Render(headerContent)
 }
 
 func (m LogcatViewModel) footerView() string {
