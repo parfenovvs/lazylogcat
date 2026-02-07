@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
 	"github.com/parfenovvs/lazylogcat/internal/model"
 	"github.com/parfenovvs/lazylogcat/internal/tui"
 	"github.com/parfenovvs/lazylogcat/internal/tui/commandui"
@@ -31,6 +32,27 @@ var (
 	helpTextVisual = "j/↓ down • k/↑ up • shift+V select multiple • y copy • esc to normal"
 )
 
+// shortcutMap maps the second key of a ctrl+x shortcut to its CommandData.
+// Built once from model.Commands() at package init.
+var shortcutMap = buildShortcutMap()
+
+func buildShortcutMap() map[string]model.CommandData {
+	m := make(map[string]model.CommandData)
+	for _, group := range model.Commands() {
+		for _, cmd := range group.Commands {
+			if cmd.Shortcut == "" {
+				continue
+			}
+			// Shortcuts are in the format "ctrl+x <key>"
+			parts := strings.SplitN(cmd.Shortcut, " ", 2)
+			if len(parts) == 2 && parts[0] == "ctrl+x" {
+				m[parts[1]] = cmd
+			}
+		}
+	}
+	return m
+}
+
 type LogcatViewModel struct {
 	parentSize        model.Size
 	viewport          viewport.Model
@@ -44,6 +66,7 @@ type LogcatViewModel struct {
 	startSelected     int
 	softWrap          bool
 	err               error
+	awaitingShortcut  bool
 	showCommandDialog bool
 	commandDialog     commandui.CommandDialogModel
 	deviceRequired    bool
@@ -282,7 +305,7 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 	}
 
 	// Viewport update for non-visual mode scrolling (skip internal tick messages)
-	if !m.visualMode && !m.showCommandDialog {
+	if !m.visualMode && !m.showCommandDialog && !m.awaitingShortcut {
 		if _, isBatchTick := msg.(batchTickMsg); !isBatchTick {
 			m.viewport, cmd = m.viewport.Update(msg)
 			cmds = append(cmds, cmd)
@@ -350,6 +373,12 @@ func (m *LogcatViewModel) handleKeyMsg(msg tea.KeyMsg) updateResult {
 		return updateResult{cmd: cmd}
 	}
 
+	// When awaiting the second key of a ctrl+x shortcut
+	if m.awaitingShortcut {
+		m.awaitingShortcut = false
+		return m.handleShortcutKey(key)
+	}
+
 	// Try global keys first (work in both modes)
 	if result, handled := m.handleGlobalKey(key); handled {
 		return result
@@ -405,9 +434,54 @@ func (m *LogcatViewModel) handleNormalModeKey(key string) updateResult {
 			DeviceId:       deviceId,
 		})
 		return updateResult{needsRender: true}
+
+	case "ctrl+x":
+		m.awaitingShortcut = true
+		return updateResult{}
 	}
 
 	return updateResult{}
+}
+
+// handleShortcutKey handles the second key of a ctrl+x shortcut sequence.
+// It looks up the key in the shortcut map and either performs an action directly
+// or opens the appropriate sub-dialog.
+func (m *LogcatViewModel) handleShortcutKey(key string) updateResult {
+	cmdData, ok := shortcutMap[key]
+	if !ok {
+		return updateResult{}
+	}
+
+	// Action commands execute immediately without opening a dialog
+	if cmdData.Type == model.CommandTypeAction {
+		switch cmdData.Command {
+		case model.CommandToggleWrap:
+			m.softWrap = !m.softWrap
+			return updateResult{cmd: func() tea.Msg { return tui.ReconnectLogcatCmd{} }}
+		case model.CommandReconnect:
+			m.visualMode = false
+			return updateResult{cmd: func() tea.Msg { return tui.ReconnectLogcatCmd{} }}
+		case model.CommandExit:
+			return updateResult{cmd: func() tea.Msg { return tui.ExitCmd{} }}
+		}
+		return updateResult{}
+	}
+
+	// Navigation commands open the sub-dialog directly
+	cfg := commandui.DialogConfig{
+		Filter:         m.filter,
+		Format:         m.format,
+		SoftWrap:       m.softWrap,
+		SelectedDevice: m.device,
+	}
+	if m.device != nil {
+		cfg.DeviceId = m.device.Id
+	}
+
+	var cmd tea.Cmd
+	m.commandDialog, cmd = commandui.NewDialogForCommand(cfg, cmdData.Command)
+	m.showCommandDialog = true
+	return updateResult{cmd: cmd, needsRender: true}
 }
 
 // handleVisualModeKey handles keys specific to visual mode
@@ -517,6 +591,10 @@ func (m LogcatViewModel) View() string {
 	}
 
 	baseView := m.renderBaseView()
+
+	if m.awaitingShortcut {
+		return tui.DimView(baseView)
+	}
 
 	if m.showCommandDialog {
 		dimmedBaseView := tui.DimView(baseView)

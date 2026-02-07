@@ -2,6 +2,7 @@ package commandui
 
 import (
 	"fmt"
+	"maps"
 
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -167,6 +168,51 @@ func NewDialog(cfg DialogConfig) CommandDialogModel {
 		filter:          cfg.Filter,
 		deviceId:        cfg.DeviceId,
 	}
+}
+
+// NewDialogForCommand creates a command dialog that opens directly in the sub-dialog
+// for the given command, skipping the main command list. Returns the model and an optional
+// tea.Cmd (needed for text input cursor blink).
+func NewDialogForCommand(cfg DialogConfig, cmd model.Command) (CommandDialogModel, tea.Cmd) {
+	m := NewDialog(cfg)
+
+	switch cmd {
+	case model.CommandLevel:
+		m.state = stateLogLevel
+	case model.CommandFormat:
+		m.state = stateFormat
+	case model.CommandModifiers:
+		m.tempModifiers = make(map[string]bool)
+		maps.Copy(m.tempModifiers, m.activeModifiers)
+		m.modifiersTable = m.refreshModifierRows()
+		m.state = stateModifiers
+	case model.CommandDevices:
+		deviceTable, deviceMap, err := loadDevices(cfg.SelectedDevice)
+		m.deviceTable = deviceTable
+		m.deviceMap = deviceMap
+		m.deviceErr = err
+		m.state = stateDevices
+	case model.CommandPackage:
+		m.textInputCommand = cmd
+		m.textInputTitle = textInputTitle(cmd)
+		m.textInput = newDialogTextInput(textInputPlaceholder(cmd), cfg.Filter.PackageName)
+		m.state = stateTextInput
+		return m, textinput.Blink
+	case model.CommandTag:
+		m.textInputCommand = cmd
+		m.textInputTitle = textInputTitle(cmd)
+		m.textInput = newDialogTextInput(textInputPlaceholder(cmd), cfg.Filter.Tag)
+		m.state = stateTextInput
+		return m, textinput.Blink
+	case model.CommandContent:
+		m.textInputCommand = cmd
+		m.textInputTitle = textInputTitle(cmd)
+		m.textInput = newDialogTextInput(textInputPlaceholder(cmd), cfg.Filter.Text)
+		m.state = stateTextInput
+		return m, textinput.Blink
+	}
+
+	return m, nil
 }
 
 // NewDeviceDialog creates a command dialog that opens directly in the device selection state.
