@@ -27,7 +27,7 @@ var (
 			Padding(0, 1)
 	}()
 
-	helpTextNormal = "ctrl+f filters • ctrl+r reconnect • ctrl+d devices • L toggle level • G jump to recent • C clear • v visual"
+	helpTextNormal = "ctrl+f filters • ctrl+d devices • L toggle level • G jump to recent • C clear • v visual"
 	helpTextVisual = "j/↓ down • k/↑ up • V select multiple • y copy • esc exit visual"
 )
 
@@ -144,8 +144,12 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 
 	case commandui.CommandDialogSelectMsg:
 		m.showCommandDialog = false
-		if msg.Command == model.CommandToggleWrap {
+		switch msg.Command {
+		case model.CommandToggleWrap:
 			m.softWrap = !m.softWrap
+			return m, func() tea.Msg { return tui.ReconnectLogcatCmd{} }
+		case model.CommandReconnect:
+			m.visualMode = false
 			return m, func() tea.Msg { return tui.ReconnectLogcatCmd{} }
 		}
 		return m, nil
@@ -309,12 +313,6 @@ func (m *LogcatViewModel) handleKeyMsg(msg tea.KeyMsg) updateResult {
 // handleGlobalKey handles keys that work in both normal and visual modes
 func (m *LogcatViewModel) handleGlobalKey(key string) (updateResult, bool) {
 	switch key {
-	case "ctrl+r":
-		m.visualMode = false
-		return updateResult{
-			cmd: func() tea.Msg { return tui.ReconnectLogcatCmd{} },
-		}, true
-
 	case "ctrl+d":
 		return updateResult{
 			cmd: func() tea.Msg { return tui.NavigateToDevicesCmd{} },
