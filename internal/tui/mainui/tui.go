@@ -8,7 +8,6 @@ import (
 	"github.com/parfenovvs/lazylogcat/internal/config"
 	"github.com/parfenovvs/lazylogcat/internal/model"
 	"github.com/parfenovvs/lazylogcat/internal/tui"
-	"github.com/parfenovvs/lazylogcat/internal/tui/filterui"
 	"github.com/parfenovvs/lazylogcat/internal/tui/logcatui"
 	"github.com/parfenovvs/lazylogcat/internal/util"
 )
@@ -19,7 +18,6 @@ type sessionState int
 
 const (
 	logcatView sessionState = iota
-	filterView
 )
 
 type MainModel struct {
@@ -34,7 +32,6 @@ type MainModel struct {
 	softWrap       bool
 
 	logcatView logcatui.LogcatViewModel
-	filterView filterui.FilterViewModel
 }
 
 func InitMainModel(c config.Config) MainModel {
@@ -148,23 +145,6 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return tui.NavigateToLogcatCmd{}
 		}
 
-	case tui.NavigateToFilterCmd:
-		m.state = filterView
-		m.filterView = filterui.New(
-			m.windowSize,
-			m.currentDevice.Id,
-			m.filter,
-			m.format,
-		)
-		return m, nil
-
-	case tui.UpdateFilterCmd:
-		m.filter = msg.Filter
-		m.format = msg.Format
-		return m, func() tea.Msg {
-			return tui.NavigateToLogcatCmd{}
-		}
-
 	case tui.NavigateToLogcatCmd:
 		m.state = logcatView
 		logcatui.Close(&m.logcatView)
@@ -178,11 +158,6 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case logcatView:
 		newLogcatViewing, newCmd := m.logcatView.Update(msg)
 		m.logcatView = newLogcatViewing
-		cmd = newCmd
-
-	case filterView:
-		newFilterView, newCmd := m.filterView.Update(msg)
-		m.filterView = newFilterView
 		cmd = newCmd
 	}
 
@@ -200,8 +175,6 @@ func (m MainModel) View() string {
 	switch m.state {
 	case logcatView:
 		content = m.logcatView.View()
-	case filterView:
-		content = m.filterView.View()
 	}
 
 	return style.Render(content)

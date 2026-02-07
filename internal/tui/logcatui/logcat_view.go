@@ -27,8 +27,8 @@ var (
 			Padding(0, 1)
 	}()
 
-	helpTextNormal = "ctrl+f filters • ctrl+p commands • L toggle level • G jump to recent • C clear • v visual"
-	helpTextVisual = "j/↓ down • k/↑ up • V select multiple • y copy • esc exit visual"
+	helpTextNormal = "ctrl+p commands • G jump to recent • C clear • v visual"
+	helpTextVisual = "j/↓ down • k/↑ up • shift+V select multiple • y copy • esc to normal"
 )
 
 type LogcatViewModel struct {
@@ -365,14 +365,6 @@ func (m *LogcatViewModel) handleKeyMsg(msg tea.KeyMsg) updateResult {
 // handleGlobalKey handles keys that work in both normal and visual modes
 func (m *LogcatViewModel) handleGlobalKey(key string) (updateResult, bool) {
 	switch key {
-	case "ctrl+f":
-		if m.device == nil {
-			return updateResult{}, true // No device, ignore filter shortcut
-		}
-		return updateResult{
-			cmd: func() tea.Msg { return tui.NavigateToFilterCmd{} },
-		}, true
-
 	case "G":
 		m.viewport.GotoBottom()
 		return updateResult{}, true
@@ -395,12 +387,6 @@ func (m *LogcatViewModel) handleGlobalKey(key string) (updateResult, bool) {
 // handleNormalModeKey handles keys specific to normal (non-visual) mode
 func (m *LogcatViewModel) handleNormalModeKey(key string) updateResult {
 	switch key {
-	case "L":
-		m.filter.Level = m.filter.Level.Next()
-		return updateResult{
-			cmd: func() tea.Msg { return tui.ReconnectLogcatCmd{} },
-		}
-
 	case "C":
 		m.log.Clear()
 		return updateResult{needsRender: true}

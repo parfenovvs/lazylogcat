@@ -6,8 +6,6 @@ type MeasureCmd struct{}
 
 type NavigateToLogcatCmd struct{}
 
-type NavigateToFilterCmd struct{}
-
 type DeviceSelectedMsg struct {
 	Device   model.Device
 	Filter   model.Filter
@@ -16,11 +14,6 @@ type DeviceSelectedMsg struct {
 }
 
 type ShowDeviceDialogCmd struct{}
-
-type UpdateFilterCmd struct {
-	Filter model.Filter
-	Format model.Format
-}
 
 type ReconnectLogcatCmd struct{}
 
