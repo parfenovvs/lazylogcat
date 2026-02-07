@@ -255,6 +255,20 @@ func (m CommandDialogModel) updateCommands(msg tea.KeyMsg, key string) (CommandD
 				m.state = stateTextInput
 				return m, textinput.Blink
 			}
+			if cmdData.Type == model.CommandTypeNavigation && cmdData.Command == model.CommandTag {
+				m.textInputCommand = cmdData.Command
+				m.textInputTitle = textInputTitle(cmdData.Command)
+				m.textInput = newDialogTextInput(textInputPlaceholder(cmdData.Command), m.filter.Tag)
+				m.state = stateTextInput
+				return m, textinput.Blink
+			}
+			if cmdData.Type == model.CommandTypeNavigation && cmdData.Command == model.CommandContent {
+				m.textInputCommand = cmdData.Command
+				m.textInputTitle = textInputTitle(cmdData.Command)
+				m.textInput = newDialogTextInput(textInputPlaceholder(cmdData.Command), m.filter.Text)
+				m.state = stateTextInput
+				return m, textinput.Blink
+			}
 			return m, func() tea.Msg { return CommandDialogSelectMsg{Command: cmdData.Command} }
 		}
 		return m, nil

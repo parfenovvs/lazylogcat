@@ -175,6 +175,12 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		case model.CommandPackage:
 			m.filter.PackageName = msg.Value
 			return m, func() tea.Msg { return tui.ReconnectLogcatCmd{} }
+		case model.CommandTag:
+			m.filter.Tag = msg.Value
+			return m, func() tea.Msg { return tui.ReconnectLogcatCmd{} }
+		case model.CommandContent:
+			m.filter.Text = msg.Value
+			return m, func() tea.Msg { return tui.ReconnectLogcatCmd{} }
 		}
 		return m, nil
 
