@@ -21,11 +21,16 @@ type CommandDialogLevelSelectedMsg struct {
 	Level model.Level
 }
 
+type CommandDialogFormatSelectedMsg struct {
+	Format string
+}
+
 type dialogState int
 
 const (
 	stateCommands dialogState = iota
 	stateLogLevel
+	stateFormat
 )
 
 var dialogStyle = func() lipgloss.Style {
@@ -53,6 +58,9 @@ type CommandDialogModel struct {
 
 	levelTable table.Model
 	levelMap   map[int]model.Level
+
+	formatTable table.Model
+	formatMap   map[int]string
 }
 
 func NewDialog(filter model.Filter, format model.Format, softWrap bool) CommandDialogModel {
@@ -124,14 +132,17 @@ func NewDialog(filter model.Filter, format model.Format, softWrap bool) CommandD
 		currentLevel = model.LvlV
 	}
 	levelTable, levelMap := newLevelTable(currentLevel)
+	formatTable, formatMap := newFormatTable(format.Value())
 
 	return CommandDialogModel{
-		state:      stateCommands,
-		table:      t,
-		skipRows:   skipRows,
-		commandMap: commandMap,
-		levelTable: levelTable,
-		levelMap:   levelMap,
+		state:       stateCommands,
+		table:       t,
+		skipRows:    skipRows,
+		commandMap:  commandMap,
+		levelTable:  levelTable,
+		levelMap:    levelMap,
+		formatTable: formatTable,
+		formatMap:   formatMap,
 	}
 }
 
@@ -159,6 +170,31 @@ func newLevelTable(currentLevel model.Level) (table.Model, map[int]model.Level) 
 	t.SetCursor(initialCursor)
 
 	return t, levelMap
+}
+
+func newFormatTable(currentFormat string) (table.Model, map[int]string) {
+	columns := []table.Column{
+		{Title: "", Width: 12},
+		{Title: "", Width: 3},
+	}
+
+	formatMap := make(map[int]string)
+	var rows []table.Row
+	initialCursor := 0
+	for i, name := range model.AllFormats {
+		formatMap[i] = name
+		marker := ""
+		if name == currentFormat {
+			marker = "●"
+			initialCursor = i
+		}
+		rows = append(rows, table.Row{name, marker})
+	}
+
+	t := newTable(columns, rows, len(rows))
+	t.SetCursor(initialCursor)
+
+	return t, formatMap
 }
 
 func newTable(columns []table.Column, rows []table.Row, height int) table.Model {
@@ -200,6 +236,8 @@ func (m CommandDialogModel) Update(msg tea.Msg) (CommandDialogModel, tea.Cmd) {
 			return m.updateCommands(msg, key)
 		case stateLogLevel:
 			return m.updateLogLevel(msg, key)
+		case stateFormat:
+			return m.updateFormat(msg, key)
 		}
 	}
 
@@ -211,6 +249,10 @@ func (m CommandDialogModel) updateCommands(msg tea.KeyMsg, key string) (CommandD
 		if cmdData, ok := m.commandMap[m.table.Cursor()]; ok {
 			if cmdData.Type == model.CommandTypeNavigation && cmdData.Command == model.CommandLevel {
 				m.state = stateLogLevel
+				return m, nil
+			}
+			if cmdData.Type == model.CommandTypeNavigation && cmdData.Command == model.CommandFormat {
+				m.state = stateFormat
 				return m, nil
 			}
 			return m, func() tea.Msg { return CommandDialogSelectMsg{Command: cmdData.Command} }
@@ -254,10 +296,24 @@ func (m CommandDialogModel) updateLogLevel(msg tea.KeyMsg, key string) (CommandD
 	return m, nil
 }
 
+func (m CommandDialogModel) updateFormat(msg tea.KeyMsg, key string) (CommandDialogModel, tea.Cmd) {
+	if key == "enter" {
+		if fmt, ok := m.formatMap[m.formatTable.Cursor()]; ok {
+			return m, func() tea.Msg { return CommandDialogFormatSelectedMsg{Format: fmt} }
+		}
+		return m, nil
+	}
+
+	m.formatTable, _ = m.formatTable.Update(msg)
+	return m, nil
+}
+
 func (m CommandDialogModel) View() string {
 	switch m.state {
 	case stateLogLevel:
 		return m.viewLogLevel()
+	case stateFormat:
+		return m.viewFormat()
 	default:
 		return m.viewCommands()
 	}
@@ -274,6 +330,13 @@ func (m CommandDialogModel) viewLogLevel() string {
 	title := lipgloss.NewStyle().Bold(true).Render("Log Level")
 	footer := lipgloss.NewStyle().Foreground(theme.FGHelp).Render("esc to close")
 	content := title + "\n" + m.levelTable.View() + "\n" + footer
+	return dialogStyle().Render(content)
+}
+
+func (m CommandDialogModel) viewFormat() string {
+	title := lipgloss.NewStyle().Bold(true).Render("Format")
+	footer := lipgloss.NewStyle().Foreground(theme.FGHelp).Render("esc to close")
+	content := title + "\n" + m.formatTable.View() + "\n" + footer
 	return dialogStyle().Render(content)
 }
 
