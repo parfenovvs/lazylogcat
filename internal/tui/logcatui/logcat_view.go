@@ -169,6 +169,15 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 			return tui.DeviceSelectedMsg{Device: msg.Device}
 		}
 
+	case commandui.CommandDialogTextInputAppliedMsg:
+		m.showCommandDialog = false
+		switch msg.Command {
+		case model.CommandPackage:
+			m.filter.PackageName = msg.Value
+			return m, func() tea.Msg { return tui.ReconnectLogcatCmd{} }
+		}
+		return m, nil
+
 	case commandui.CommandDialogSelectMsg:
 		m.showCommandDialog = false
 		switch msg.Command {
@@ -392,7 +401,17 @@ func (m *LogcatViewModel) handleNormalModeKey(key string) updateResult {
 
 	case "ctrl+p":
 		m.showCommandDialog = true
-		m.commandDialog = commandui.NewDialog(m.filter, m.format, m.softWrap, m.device)
+		deviceId := ""
+		if m.device != nil {
+			deviceId = m.device.Id
+		}
+		m.commandDialog = commandui.NewDialog(commandui.DialogConfig{
+			Filter:         m.filter,
+			Format:         m.format,
+			SoftWrap:       m.softWrap,
+			SelectedDevice: m.device,
+			DeviceId:       deviceId,
+		})
 		return updateResult{needsRender: true}
 	}
 
