@@ -24,6 +24,7 @@ const (
 	stateLogLevel
 	stateFormat
 	stateDevices
+	stateModifiers
 )
 
 var dialogStyle = func() lipgloss.Style {
@@ -47,6 +48,11 @@ type CommandDialogModel struct {
 	deviceMap      map[int]model.Device
 	selectedDevice *model.Device
 	deviceErr      error
+
+	modifiersTable  table.Model
+	modifierMap     map[int]string
+	tempModifiers   map[string]bool
+	activeModifiers map[string]bool
 }
 
 func NewDialog(filter model.Filter, format model.Format, softWrap bool, selectedDevice *model.Device) CommandDialogModel {
@@ -74,7 +80,7 @@ func NewDialog(filter model.Filter, format model.Format, softWrap bool, selected
 			case 1:
 				return mods[0]
 			default:
-				return fmt.Sprintf("[%d] mods", len(mods))
+				return fmt.Sprintf("[%d]", len(mods))
 			}
 		case model.CommandToggleWrap:
 			if softWrap {
@@ -124,17 +130,21 @@ func NewDialog(filter model.Filter, format model.Format, softWrap bool, selected
 	}
 	levelTable, levelMap := newLevelTable(currentLevel)
 	formatTable, formatMap := newFormatTable(format.Value())
+	modifiersTable, modifierMap := newModifiersTable(format.ActiveModifiers)
 
 	return CommandDialogModel{
-		state:          stateCommands,
-		table:          t,
-		skipRows:       skipRows,
-		commandMap:     commandMap,
-		levelTable:     levelTable,
-		levelMap:       levelMap,
-		formatTable:    formatTable,
-		formatMap:      formatMap,
-		selectedDevice: selectedDevice,
+		state:           stateCommands,
+		table:           t,
+		skipRows:        skipRows,
+		commandMap:      commandMap,
+		levelTable:      levelTable,
+		levelMap:        levelMap,
+		formatTable:     formatTable,
+		formatMap:       formatMap,
+		selectedDevice:  selectedDevice,
+		modifiersTable:  modifiersTable,
+		modifierMap:     modifierMap,
+		activeModifiers: format.ActiveModifiers,
 	}
 }
 
@@ -155,6 +165,11 @@ func (m CommandDialogModel) Update(msg tea.Msg) (CommandDialogModel, tea.Cmd) {
 	case tea.KeyMsg:
 		key := msg.String()
 		if key == "ctrl+p" || key == "esc" {
+			if m.state == stateModifiers {
+				return m, func() tea.Msg {
+					return CommandDialogModifiersSelectedMsg{Modifiers: m.tempModifiers}
+				}
+			}
 			return m, func() tea.Msg { return CommandDialogCloseMsg{} }
 		}
 
@@ -167,6 +182,8 @@ func (m CommandDialogModel) Update(msg tea.Msg) (CommandDialogModel, tea.Cmd) {
 			return m.updateFormat(msg, key)
 		case stateDevices:
 			return m.updateDevices(msg, key)
+		case stateModifiers:
+			return m.updateModifiers(msg, key)
 		}
 	}
 
@@ -182,6 +199,15 @@ func (m CommandDialogModel) updateCommands(msg tea.KeyMsg, key string) (CommandD
 			}
 			if cmdData.Type == model.CommandTypeNavigation && cmdData.Command == model.CommandFormat {
 				m.state = stateFormat
+				return m, nil
+			}
+			if cmdData.Type == model.CommandTypeNavigation && cmdData.Command == model.CommandModifiers {
+				m.tempModifiers = make(map[string]bool)
+				for k, v := range m.activeModifiers {
+					m.tempModifiers[k] = v
+				}
+				m.modifiersTable = m.refreshModifierRows()
+				m.state = stateModifiers
 				return m, nil
 			}
 			if cmdData.Type == model.CommandTypeNavigation && cmdData.Command == model.CommandDevices {
@@ -229,6 +255,8 @@ func (m CommandDialogModel) View() string {
 		return m.viewFormat()
 	case stateDevices:
 		return m.viewDevices()
+	case stateModifiers:
+		return m.viewModifiers()
 	default:
 		return m.viewCommands()
 	}
