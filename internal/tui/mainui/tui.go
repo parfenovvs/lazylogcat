@@ -126,6 +126,10 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.windowSize
 		}
 
+	case tui.ExitCmd:
+		logcatui.Close(&m.logcatView)
+		return m, tea.Quit
+
 	case tui.DeviceSelectedMsg:
 		m.currentDevice = &msg.Device
 		m.deviceRequired = false

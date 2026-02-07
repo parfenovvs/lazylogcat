@@ -20,3 +20,5 @@ type UpdateFilterCmd struct {
 }
 
 type ReconnectLogcatCmd struct{}
+
+type ExitCmd struct{}

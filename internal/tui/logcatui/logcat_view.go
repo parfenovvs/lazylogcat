@@ -173,6 +173,8 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		case model.CommandReconnect:
 			m.visualMode = false
 			return m, func() tea.Msg { return tui.ReconnectLogcatCmd{} }
+		case model.CommandExit:
+			return m, func() tea.Msg { return tui.ExitCmd{} }
 		}
 		return m, nil
 
