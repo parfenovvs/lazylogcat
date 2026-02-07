@@ -1,7 +1,7 @@
 lazylogcat
 
 .lazylogcat.log
-config.json
+.lazylogcat/config.local.json
 
 *.local.md
 

@@ -42,41 +42,21 @@ func InitMainModel(c config.Config) MainModel {
 		slog.Error("Failed to get connected devices", "error", err)
 	}
 
-	// Device resolution:
-	// 1. If config has a device_id, try to find it among connected devices
-	if err == nil && len(devices) > 0 && c.Session.DeviceId != "" {
-		for _, d := range devices {
-			if d.Id == c.Session.DeviceId {
-				m.currentDevice = &d
-				break
-			}
-		}
-	}
-
-	// 2. If config device not found, but devices exist, use first available
-	if m.currentDevice == nil && err == nil && len(devices) > 0 {
-		if c.Session.DeviceId != "" {
-			// Config specified a device that's not connected - show device dialog
-			m.deviceRequired = true
-		}
-		if !m.deviceRequired {
-			m.currentDevice = &devices[0]
-		}
-	}
-
-	// 3. No devices at all - show device dialog
-	if m.currentDevice == nil && !m.deviceRequired {
+	// Device resolution: use first available device, or show device dialog
+	if err == nil && len(devices) > 0 {
+		m.currentDevice = &devices[0]
+	} else {
 		m.deviceRequired = true
 	}
 
 	// Clear package filter if no device selected
 	if m.currentDevice == nil {
-		c.Session.Pkg = ""
+		c.Filter.Pkg = config.TextFilter{}
 	}
-	if c.Session.Pkg != "" {
-		_, err := util.GetPidByPackageName(m.currentDevice.Id, c.Session.Pkg)
+	if !c.Filter.Pkg.IsZero() {
+		_, err := util.GetPidByPackageName(m.currentDevice.Id, c.Filter.Pkg.Value)
 		if err != nil {
-			c.Session.Pkg = ""
+			c.Filter.Pkg = config.TextFilter{}
 		}
 	}
 

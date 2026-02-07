@@ -19,7 +19,6 @@ const (
 	CommandDevices
 
 	// Other
-	CommandExportConfig
 	CommandExit
 )
 
@@ -72,7 +71,6 @@ func Commands() []CommandGroup {
 		{
 			Name: "Other",
 			Commands: []CommandData{
-				{Command: CommandExportConfig, Type: CommandTypeAction, Name: "Export config", Shortcut: "ctrl+x e"},
 				{Command: CommandExit, Type: CommandTypeAction, Name: "Exit", Shortcut: "ctrl+c"},
 			},
 		},

@@ -11,7 +11,6 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/parfenovvs/lazylogcat/internal/config"
 	"github.com/parfenovvs/lazylogcat/internal/model"
 	"github.com/parfenovvs/lazylogcat/internal/tui"
 	"github.com/parfenovvs/lazylogcat/internal/tui/commandui"
@@ -196,30 +195,6 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 			return m, func() tea.Msg { return tui.ReconnectLogcatCmd{} }
 		case model.CommandExit:
 			return m, func() tea.Msg { return tui.ExitCmd{} }
-		case model.CommandExportConfig:
-			deviceId := ""
-			if m.device != nil {
-				deviceId = m.device.Id
-			}
-			cfg := config.Config{
-				Prefs: config.Prefs{
-					Format:    m.format.Value(),
-					Modifiers: m.format.Modifiers(),
-				},
-				Session: config.Session{
-					DeviceId: deviceId,
-					Pkg:      m.filter.PackageName,
-					Tag:      m.filter.Tag,
-					Txt:      m.filter.Text,
-				},
-			}
-			filename := fmt.Sprintf("lazylogcat_%s.json", time.Now().Format("20060102_150405"))
-			if err := config.Save(cfg, filename); err != nil {
-				slog.Error("Failed to export config", "error", err)
-			} else {
-				slog.Info("Config exported", "file", filename)
-			}
-			return m, nil
 		}
 		return m, nil
 

@@ -85,9 +85,6 @@ Optional: Move the binary to a directory in your PATH
 # Launch the TUI
 lazylogcat
 
-# Load custom configuration
-lazylogcat --config config.json
-
 # Enable debug logging (to .lazylogcat.log file in working directory)
 lazylogcat --debug
 ```
@@ -98,32 +95,23 @@ lazylogcat --debug
 
 ## Configuration
 
-lazylogcat can be customized using a JSON configuration file.
+Configuration is automatically discovered and merged in layers:
 
-**Behavior:**
-- No config file: Uses defaults
-- Config file not found: Application exits with error
-- Invalid JSON: Falls back to defaults (error logged with `--debug`)
+`~/.config/lazylogcat/config.json` → `.lazylogcat/config.json` → `.lazylogcat/config.local.json`
 
-### Configuration Format
+Each layer overrides the previous. All fields are optional. See the [JSON Schema](config.schema.json) for editor autocompletion.
 
 ```json
 {
-  "preferences": {
-    // Log format (default: "time")
-    // Options: "brief", "long", "process", "raw", "tag", "thread", "threadtime", "time"
+  "$schema": "https://github.com/parfenovvs/lazylogcat/raw/trunk/config.schema.json",
+  "display": {
     "log_format": "time",
-    
-    // Format modifiers (default: ["color"])
-    // Options: "color", "descriptive", "epoch", "monotonic", "printable", 
-    //          "uid", "usec", "UTC", "year", "zone"
     "log_modifiers": ["color"]
   },
-  "session": {
-    "device_id": "emulator-5554",      // Android device ID
-    "package_name": "com.example.app", // Filtered package
-    "log_tag": "MainActivity",         // Filtered tag (exact match)
-    "log_text": "error"                // Text search filter
+  "filter": {
+    "package_name": "com.example.app",
+    "log_tag": "MainActivity",
+    "log_text": "error"
   }
 }
 ```

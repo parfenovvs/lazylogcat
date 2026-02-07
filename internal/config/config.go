@@ -2,47 +2,77 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 )
 
 // Config represents the application's configuration structure.
-// It includes user preferences and session details.
-// Prefs holds user preferences for log display.
-// Session holds the last used session parameters.
+// It includes display settings and filter parameters.
 type Config struct {
-	Prefs   Prefs   `json:"preferences"`
-	Session Session `json:"session"`
+	Display Display `json:"display"`
+	Filter  Filter  `json:"filter"`
 }
 
-type Prefs struct {
+// Display holds user preferences for log output appearance.
+type Display struct {
 	Format    string   `json:"log_format,omitempty"`
 	Modifiers []string `json:"log_modifiers,omitempty"`
 }
 
-type Session struct {
-	DeviceId string `json:"device_id,omitempty"`
-	Pkg      string `json:"package_name,omitempty"`
-	Tag      string `json:"log_tag,omitempty"`
-	Txt      string `json:"log_text,omitempty"`
+// Filter holds log filtering parameters.
+type Filter struct {
+	Pkg TextFilter `json:"package_name,omitempty"`
+	Tag TextFilter `json:"log_tag,omitempty"`
+	Txt TextFilter `json:"log_text,omitempty"`
 }
 
+// TextFilter represents a filter field that currently holds a value,
+// and is structured to support future extensions (e.g. regex mode).
+// It accepts both a plain string and an object form in JSON:
+//
+//	"log_tag": "MyTag"
+//	"log_tag": { "value": "MyTag" }
+type TextFilter struct {
+	Value string `json:"value"`
+}
+
+// IsZero returns true if the TextFilter has no meaningful value set.
+func (f TextFilter) IsZero() bool {
+	return f.Value == ""
+}
+
+// UnmarshalJSON supports both plain string and object forms.
+func (f *TextFilter) UnmarshalJSON(data []byte) error {
+	// Try plain string first
+	var s string
+	if err := json.Unmarshal(data, &s); err == nil {
+		f.Value = s
+		return nil
+	}
+	// Fall back to object form
+	type alias TextFilter
+	return json.Unmarshal(data, (*alias)(f))
+}
+
+// MarshalJSON outputs the short string form when only Value is set.
+func (f TextFilter) MarshalJSON() ([]byte, error) {
+	return json.Marshal(f.Value)
+}
+
+// DefaultConfig returns the default configuration with sensible defaults.
 func DefaultConfig() Config {
 	return Config{
-		Prefs: Prefs{
+		Display: Display{
 			Format:    "time",
 			Modifiers: []string{"color"},
-		},
-		Session: Session{
-			DeviceId: "",
-			Pkg:      "",
-			Tag:      "",
-			Txt:      "",
 		},
 	}
 }
 
+// String returns a JSON string representation of the config for logging.
 func (c *Config) String() string {
 	data, err := json.Marshal(c)
 	if err != nil {
@@ -51,30 +81,93 @@ func (c *Config) String() string {
 	return string(data)
 }
 
-// Save writes the configuration to a JSON file at the given path.
-func Save(cfg Config, path string) error {
-	data, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal config: %w", err)
+// Resolve discovers and merges configuration from all layers in order:
+//  1. Default configuration
+//  2. Global user config: ~/.config/lazylogcat/config.json
+//  3. Project config: .lazylogcat/config.json
+//  4. Local override: .lazylogcat/config.local.json
+//
+// Returns the merged config and any non-fatal errors encountered during loading.
+// Always returns a usable config, even if some files fail to load.
+func Resolve() (Config, error) {
+	cfg := DefaultConfig()
+	var errs []error
+
+	for _, path := range configPaths() {
+		overlay, err := loadFile(path)
+		if err != nil {
+			if !errors.Is(err, os.ErrNotExist) {
+				slog.Warn("Failed to load config file, skipping", "path", path, "error", err)
+				errs = append(errs, fmt.Errorf("%s: %w", path, err))
+			}
+			continue
+		}
+		slog.Debug("Loaded config layer", "path", path)
+		cfg = merge(cfg, overlay)
 	}
-	if err := os.WriteFile(path, data, 0644); err != nil {
-		return fmt.Errorf("failed to write config file: %w", err)
-	}
-	return nil
+
+	return cfg, errors.Join(errs...)
 }
 
-// Load reads the configuration from the provided file.
-// If the file is invalid or cannot be read, it returns a default configuration and an error.
-func Load(file *os.File) (Config, error) {
-	config := DefaultConfig()
+// configPaths returns the ordered list of config file paths to check.
+func configPaths() []string {
+	var paths []string
 
-	decoder := json.NewDecoder(file)
-	err := decoder.Decode(&config)
-
-	if err != nil {
-		slog.Error("Failed to decode config file", "error", err)
-		return DefaultConfig(), fmt.Errorf("failed to decode config file: %w", err)
+	// Layer 1: Global user config (~/.config/lazylogcat/config.json)
+	if dir, err := os.UserConfigDir(); err == nil {
+		paths = append(paths, filepath.Join(dir, "lazylogcat", "config.json"))
 	}
 
-	return config, nil
+	// Layer 2: Project config (.lazylogcat/config.json)
+	paths = append(paths, filepath.Join(".lazylogcat", "config.json"))
+
+	// Layer 3: Local override (.lazylogcat/config.local.json)
+	paths = append(paths, filepath.Join(".lazylogcat", "config.local.json"))
+
+	return paths
+}
+
+// loadFile reads and decodes a single JSON config file.
+// Returns os.ErrNotExist if the file does not exist.
+func loadFile(path string) (Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return Config{}, err
+	}
+
+	var cfg Config
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return Config{}, fmt.Errorf("failed to decode config file: %w", err)
+	}
+
+	return cfg, nil
+}
+
+// merge applies non-zero fields from overlay on top of base.
+// Strings: non-empty overlay replaces base.
+// Slices: non-nil overlay replaces base entirely ([] explicitly clears).
+// TextFilter: non-zero overlay replaces base.
+func merge(base, overlay Config) Config {
+	result := base
+
+	// Display
+	if overlay.Display.Format != "" {
+		result.Display.Format = overlay.Display.Format
+	}
+	if overlay.Display.Modifiers != nil {
+		result.Display.Modifiers = overlay.Display.Modifiers
+	}
+
+	// Filter
+	if !overlay.Filter.Pkg.IsZero() {
+		result.Filter.Pkg = overlay.Filter.Pkg
+	}
+	if !overlay.Filter.Tag.IsZero() {
+		result.Filter.Tag = overlay.Filter.Tag
+	}
+	if !overlay.Filter.Txt.IsZero() {
+		result.Filter.Txt = overlay.Filter.Txt
+	}
+
+	return result
 }

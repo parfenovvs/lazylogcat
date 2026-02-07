@@ -7,13 +7,13 @@ import (
 
 func FilterFromConfig(c *config.Config) model.Filter {
 	return model.Filter{
-		PackageName: c.Session.Pkg,
-		Tag:         c.Session.Tag,
-		Text:        c.Session.Txt,
+		PackageName: c.Filter.Pkg.Value,
+		Tag:         c.Filter.Tag.Value,
+		Text:        c.Filter.Txt.Value,
 		Level:       model.LvlV,
 	}
 }
 
 func FormatFromConfig(c *config.Config) model.Format {
-	return model.NewFormat(c.Prefs.Format, c.Prefs.Modifiers...)
+	return model.NewFormat(c.Display.Format, c.Display.Modifiers...)
 }

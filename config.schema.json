@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/parfenovvs/lazylogcat/raw/trunk/config.schema.json",
+  "title": "lazylogcat configuration",
+  "description": "Configuration file for lazylogcat. Used in ~/.config/lazylogcat/config.json (global), .lazylogcat/config.json (project), and .lazylogcat/config.local.json (local override). All fields are optional — layers are merged in order: defaults → global → project → local.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Path or URL to this schema file, for editor validation."
+    },
+    "display": {
+      "type": "object",
+      "description": "Log output appearance settings.",
+      "additionalProperties": false,
+      "properties": {
+        "log_format": {
+          "type": "string",
+          "description": "Logcat output format passed to adb logcat -v.",
+          "enum": [
+            "brief",
+            "long",
+            "process",
+            "raw",
+            "tag",
+            "thread",
+            "threadtime",
+            "time"
+          ],
+          "default": "time"
+        },
+        "log_modifiers": {
+          "type": "array",
+          "description": "Format modifiers appended to the logcat -v flag.",
+          "items": {
+            "type": "string",
+            "enum": [
+              "color",
+              "descriptive",
+              "epoch",
+              "monotonic",
+              "printable",
+              "uid",
+              "usec",
+              "UTC",
+              "year",
+              "zone"
+            ]
+          },
+          "uniqueItems": true,
+          "default": ["color"]
+        }
+      }
+    },
+    "filter": {
+      "type": "object",
+      "description": "Log filtering parameters. Each filter field accepts either a plain string or an object with a \"value\" field.",
+      "additionalProperties": false,
+      "properties": {
+        "package_name": {
+          "$ref": "#/$defs/text_filter",
+          "description": "Android package name to filter logs by (e.g. \"com.example.app\")."
+        },
+        "log_tag": {
+          "$ref": "#/$defs/text_filter",
+          "description": "Logcat tag to filter by (e.g. \"MyTag\")."
+        },
+        "log_text": {
+          "$ref": "#/$defs/text_filter",
+          "description": "Text content to search for in log lines."
+        }
+      }
+    }
+  },
+  "$defs": {
+    "text_filter": {
+      "description": "A filter value. Accepts a plain string (shorthand) or an object with a \"value\" field (extensible form).",
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "string",
+              "description": "The filter value."
+            }
+          },
+          "required": ["value"]
+        }
+      ]
+    }
+  }
+}
