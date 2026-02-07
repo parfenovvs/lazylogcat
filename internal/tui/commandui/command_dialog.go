@@ -6,7 +6,7 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/x/ansi"
+
 	"github.com/parfenovvs/lazylogcat/internal/model"
 	"github.com/parfenovvs/lazylogcat/internal/tui/theme"
 )
@@ -15,14 +15,6 @@ type CommandDialogCloseMsg struct{}
 
 type CommandDialogSelectMsg struct {
 	Command model.Command
-}
-
-type CommandDialogLevelSelectedMsg struct {
-	Level model.Level
-}
-
-type CommandDialogFormatSelectedMsg struct {
-	Format string
 }
 
 type dialogState int
@@ -36,18 +28,6 @@ const (
 var dialogStyle = func() lipgloss.Style {
 	return theme.ActivePanel().
 		Padding(1, 2)
-}
-
-var levelEntries = []struct {
-	level model.Level
-	name  string
-}{
-	{model.LvlV, "Verbose"},
-	{model.LvlD, "Debug"},
-	{model.LvlI, "Info"},
-	{model.LvlW, "Warning"},
-	{model.LvlE, "Error"},
-	{model.LvlF, "Fatal"},
 }
 
 type CommandDialogModel struct {
@@ -146,83 +126,6 @@ func NewDialog(filter model.Filter, format model.Format, softWrap bool) CommandD
 	}
 }
 
-func newLevelTable(currentLevel model.Level) (table.Model, map[int]model.Level) {
-	columns := []table.Column{
-		{Title: "", Width: 5},
-		{Title: "", Width: 12},
-		{Title: "", Width: 3},
-	}
-
-	levelMap := make(map[int]model.Level)
-	var rows []table.Row
-	initialCursor := 0
-	for i, entry := range levelEntries {
-		levelMap[i] = entry.level
-		marker := ""
-		if entry.level == currentLevel {
-			marker = "●"
-			initialCursor = i
-		}
-		rows = append(rows, table.Row{string(entry.level), entry.name, marker})
-	}
-
-	t := newTable(columns, rows, len(rows))
-	t.SetCursor(initialCursor)
-
-	return t, levelMap
-}
-
-func newFormatTable(currentFormat string) (table.Model, map[int]string) {
-	columns := []table.Column{
-		{Title: "", Width: 12},
-		{Title: "", Width: 3},
-	}
-
-	formatMap := make(map[int]string)
-	var rows []table.Row
-	initialCursor := 0
-	for i, name := range model.AllFormats {
-		formatMap[i] = name
-		marker := ""
-		if name == currentFormat {
-			marker = "●"
-			initialCursor = i
-		}
-		rows = append(rows, table.Row{name, marker})
-	}
-
-	t := newTable(columns, rows, len(rows))
-	t.SetCursor(initialCursor)
-
-	return t, formatMap
-}
-
-func newTable(columns []table.Column, rows []table.Row, height int) table.Model {
-	km := table.DefaultKeyMap()
-	km.GotoTop.SetEnabled(false)
-	km.GotoBottom.SetEnabled(false)
-	km.HalfPageUp.SetEnabled(false)
-	km.HalfPageDown.SetEnabled(false)
-	km.PageDown.SetEnabled(false)
-
-	s := table.Styles{
-		Header:   lipgloss.NewStyle(),
-		Cell:     lipgloss.NewStyle().Padding(0, 1),
-		Selected: lipgloss.NewStyle().Bold(true).Foreground(theme.FGSelected).Background(theme.BGCursor),
-	}
-
-	t := table.New(
-		table.WithColumns(columns),
-		table.WithRows(rows),
-		table.WithHeight(height),
-		table.WithFocused(true),
-		table.WithKeyMap(km),
-	)
-	t.SetStyles(s)
-
-	return t
-}
-
 func (m CommandDialogModel) Update(msg tea.Msg) (CommandDialogModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -284,30 +187,6 @@ func (m CommandDialogModel) updateCommands(msg tea.KeyMsg, key string) (CommandD
 	return m, nil
 }
 
-func (m CommandDialogModel) updateLogLevel(msg tea.KeyMsg, key string) (CommandDialogModel, tea.Cmd) {
-	if key == "enter" {
-		if lvl, ok := m.levelMap[m.levelTable.Cursor()]; ok {
-			return m, func() tea.Msg { return CommandDialogLevelSelectedMsg{Level: lvl} }
-		}
-		return m, nil
-	}
-
-	m.levelTable, _ = m.levelTable.Update(msg)
-	return m, nil
-}
-
-func (m CommandDialogModel) updateFormat(msg tea.KeyMsg, key string) (CommandDialogModel, tea.Cmd) {
-	if key == "enter" {
-		if fmt, ok := m.formatMap[m.formatTable.Cursor()]; ok {
-			return m, func() tea.Msg { return CommandDialogFormatSelectedMsg{Format: fmt} }
-		}
-		return m, nil
-	}
-
-	m.formatTable, _ = m.formatTable.Update(msg)
-	return m, nil
-}
-
 func (m CommandDialogModel) View() string {
 	switch m.state {
 	case stateLogLevel:
@@ -324,37 +203,4 @@ func (m CommandDialogModel) viewCommands() string {
 	footer := lipgloss.NewStyle().Foreground(theme.FGHelp).Render("esc to close")
 	content := title + "\n" + m.table.View() + "\n" + footer
 	return dialogStyle().Render(content)
-}
-
-func (m CommandDialogModel) viewLogLevel() string {
-	title := lipgloss.NewStyle().Bold(true).Render("Log Level")
-	footer := lipgloss.NewStyle().Foreground(theme.FGHelp).Render("esc to close")
-	content := title + "\n" + m.levelTable.View() + "\n" + footer
-	return dialogStyle().Render(content)
-}
-
-func (m CommandDialogModel) viewFormat() string {
-	title := lipgloss.NewStyle().Bold(true).Render("Format")
-	footer := lipgloss.NewStyle().Foreground(theme.FGHelp).Render("esc to close")
-	content := title + "\n" + m.formatTable.View() + "\n" + footer
-	return dialogStyle().Render(content)
-}
-
-func truncateMiddle(s string, maxWidth int) string {
-	w := ansi.StringWidth(s)
-	if w <= maxWidth {
-		return s
-	}
-	left := (maxWidth - 1) / 2
-	right := maxWidth - 1 - left
-
-	runes := []rune(s)
-	var suffix string
-	suffixW := 0
-	for i := len(runes) - 1; i >= 0 && suffixW < right; i-- {
-		suffixW++
-		suffix = string(runes[i]) + suffix
-	}
-
-	return ansi.Truncate(s, left, "") + "…" + suffix
 }
