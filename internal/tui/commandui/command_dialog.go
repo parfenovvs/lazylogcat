@@ -17,15 +17,42 @@ type CommandDialogSelectMsg struct {
 	Command model.Command
 }
 
+type CommandDialogLevelSelectedMsg struct {
+	Level model.Level
+}
+
+type dialogState int
+
+const (
+	stateCommands dialogState = iota
+	stateLogLevel
+)
+
 var dialogStyle = func() lipgloss.Style {
 	return theme.ActivePanel().
 		Padding(1, 2)
 }
 
+var levelEntries = []struct {
+	level model.Level
+	name  string
+}{
+	{model.LvlV, "Verbose"},
+	{model.LvlD, "Debug"},
+	{model.LvlI, "Info"},
+	{model.LvlW, "Warning"},
+	{model.LvlE, "Error"},
+	{model.LvlF, "Fatal"},
+}
+
 type CommandDialogModel struct {
+	state      dialogState
 	table      table.Model
 	skipRows   map[int]bool
-	commandMap map[int]model.Command
+	commandMap map[int]model.CommandData
+
+	levelTable table.Model
+	levelMap   map[int]model.Level
 }
 
 func NewDialog(filter model.Filter, format model.Format, softWrap bool) CommandDialogModel {
@@ -72,7 +99,7 @@ func NewDialog(filter model.Filter, format model.Format, softWrap bool) CommandD
 	}
 
 	skipRows := make(map[int]bool)
-	commandMap := make(map[int]model.Command)
+	commandMap := make(map[int]model.CommandData)
 	var rows []table.Row
 	for i, group := range model.Commands() {
 		if i > 0 {
@@ -83,12 +110,58 @@ func NewDialog(filter model.Filter, format model.Format, softWrap bool) CommandD
 		groupName := lipgloss.NewStyle().Bold(true).Render(group.Name)
 		rows = append(rows, table.Row{groupName, "", ""})
 		for _, cmd := range group.Commands {
-			commandMap[len(rows)] = cmd.Command
+			commandMap[len(rows)] = cmd
 			value := truncateMiddle(resolveValue(cmd.Command), 10)
 			rows = append(rows, table.Row{cmd.Name, value, cmd.Shortcut})
 		}
 	}
 
+	t := newTable(columns, rows, len(rows))
+	t.SetCursor(1) // Skip the first group header
+
+	currentLevel := filter.Level
+	if currentLevel == "" {
+		currentLevel = model.LvlV
+	}
+	levelTable, levelMap := newLevelTable(currentLevel)
+
+	return CommandDialogModel{
+		state:      stateCommands,
+		table:      t,
+		skipRows:   skipRows,
+		commandMap: commandMap,
+		levelTable: levelTable,
+		levelMap:   levelMap,
+	}
+}
+
+func newLevelTable(currentLevel model.Level) (table.Model, map[int]model.Level) {
+	columns := []table.Column{
+		{Title: "", Width: 5},
+		{Title: "", Width: 12},
+		{Title: "", Width: 3},
+	}
+
+	levelMap := make(map[int]model.Level)
+	var rows []table.Row
+	initialCursor := 0
+	for i, entry := range levelEntries {
+		levelMap[i] = entry.level
+		marker := ""
+		if entry.level == currentLevel {
+			marker = "●"
+			initialCursor = i
+		}
+		rows = append(rows, table.Row{string(entry.level), entry.name, marker})
+	}
+
+	t := newTable(columns, rows, len(rows))
+	t.SetCursor(initialCursor)
+
+	return t, levelMap
+}
+
+func newTable(columns []table.Column, rows []table.Row, height int) table.Model {
 	km := table.DefaultKeyMap()
 	km.GotoTop.SetEnabled(false)
 	km.GotoBottom.SetEnabled(false)
@@ -105,18 +178,13 @@ func NewDialog(filter model.Filter, format model.Format, softWrap bool) CommandD
 	t := table.New(
 		table.WithColumns(columns),
 		table.WithRows(rows),
-		table.WithHeight(len(rows)),
+		table.WithHeight(height),
 		table.WithFocused(true),
 		table.WithKeyMap(km),
 	)
 	t.SetStyles(s)
-	t.SetCursor(1) // Skip the first group header
 
-	return CommandDialogModel{
-		table:      t,
-		skipRows:   skipRows,
-		commandMap: commandMap,
-	}
+	return t
 }
 
 func (m CommandDialogModel) Update(msg tea.Msg) (CommandDialogModel, tea.Cmd) {
@@ -127,42 +195,85 @@ func (m CommandDialogModel) Update(msg tea.Msg) (CommandDialogModel, tea.Cmd) {
 			return m, func() tea.Msg { return CommandDialogCloseMsg{} }
 		}
 
-		if key == "enter" {
-			if cmd, ok := m.commandMap[m.table.Cursor()]; ok {
-				return m, func() tea.Msg { return CommandDialogSelectMsg{Command: cmd} }
-			}
-			return m, nil
-		}
-
-		prevCursor := m.table.Cursor()
-		m.table, _ = m.table.Update(msg)
-		newCursor := m.table.Cursor()
-
-		if m.skipRows[newCursor] && newCursor != prevCursor {
-			dir := 1
-			if newCursor < prevCursor {
-				dir = -1
-			}
-			rowCount := len(m.table.Rows())
-			target := newCursor + dir
-			for target >= 0 && target < rowCount && m.skipRows[target] {
-				target += dir
-			}
-			if target >= 0 && target < rowCount {
-				m.table.SetCursor(target)
-			} else {
-				m.table.SetCursor(prevCursor)
-			}
+		switch m.state {
+		case stateCommands:
+			return m.updateCommands(msg, key)
+		case stateLogLevel:
+			return m.updateLogLevel(msg, key)
 		}
 	}
 
 	return m, nil
 }
 
+func (m CommandDialogModel) updateCommands(msg tea.KeyMsg, key string) (CommandDialogModel, tea.Cmd) {
+	if key == "enter" {
+		if cmdData, ok := m.commandMap[m.table.Cursor()]; ok {
+			if cmdData.Type == model.CommandTypeNavigation && cmdData.Command == model.CommandLevel {
+				m.state = stateLogLevel
+				return m, nil
+			}
+			return m, func() tea.Msg { return CommandDialogSelectMsg{Command: cmdData.Command} }
+		}
+		return m, nil
+	}
+
+	prevCursor := m.table.Cursor()
+	m.table, _ = m.table.Update(msg)
+	newCursor := m.table.Cursor()
+
+	if m.skipRows[newCursor] && newCursor != prevCursor {
+		dir := 1
+		if newCursor < prevCursor {
+			dir = -1
+		}
+		rowCount := len(m.table.Rows())
+		target := newCursor + dir
+		for target >= 0 && target < rowCount && m.skipRows[target] {
+			target += dir
+		}
+		if target >= 0 && target < rowCount {
+			m.table.SetCursor(target)
+		} else {
+			m.table.SetCursor(prevCursor)
+		}
+	}
+
+	return m, nil
+}
+
+func (m CommandDialogModel) updateLogLevel(msg tea.KeyMsg, key string) (CommandDialogModel, tea.Cmd) {
+	if key == "enter" {
+		if lvl, ok := m.levelMap[m.levelTable.Cursor()]; ok {
+			return m, func() tea.Msg { return CommandDialogLevelSelectedMsg{Level: lvl} }
+		}
+		return m, nil
+	}
+
+	m.levelTable, _ = m.levelTable.Update(msg)
+	return m, nil
+}
+
 func (m CommandDialogModel) View() string {
+	switch m.state {
+	case stateLogLevel:
+		return m.viewLogLevel()
+	default:
+		return m.viewCommands()
+	}
+}
+
+func (m CommandDialogModel) viewCommands() string {
 	title := lipgloss.NewStyle().Bold(true).Render("Command List")
 	footer := lipgloss.NewStyle().Foreground(theme.FGHelp).Render("esc to close")
 	content := title + "\n" + m.table.View() + "\n" + footer
+	return dialogStyle().Render(content)
+}
+
+func (m CommandDialogModel) viewLogLevel() string {
+	title := lipgloss.NewStyle().Bold(true).Render("Log Level")
+	footer := lipgloss.NewStyle().Foreground(theme.FGHelp).Render("esc to close")
+	content := title + "\n" + m.levelTable.View() + "\n" + footer
 	return dialogStyle().Render(content)
 }
 

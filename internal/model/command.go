@@ -27,10 +27,7 @@ type CommandType int
 
 const (
 	CommandTypeNavigation CommandType = iota
-	CommandTypeToggle
-	CommandTypeInput
 	CommandTypeAction
-	CommandTypeSelection
 )
 
 type CommandData struct {
@@ -51,25 +48,25 @@ func Commands() []CommandGroup {
 		{
 			Name: "Filters",
 			Commands: []CommandData{
-				{Command: CommandPackage, Type: CommandTypeInput, Name: "Package", Shortcut: "ctrl+x p"},
-				{Command: CommandTag, Type: CommandTypeInput, Name: "Tag", Shortcut: "ctrl+x t"},
+				{Command: CommandPackage, Type: CommandTypeNavigation, Name: "Package", Shortcut: "ctrl+x p"},
+				{Command: CommandTag, Type: CommandTypeNavigation, Name: "Tag", Shortcut: "ctrl+x t"},
 				{Command: CommandLevel, Type: CommandTypeNavigation, Name: "Log level", Shortcut: "ctrl+x l"},
-				{Command: CommandContent, Type: CommandTypeInput, Name: "Content", Shortcut: "ctrl+x c"},
+				{Command: CommandContent, Type: CommandTypeNavigation, Name: "Content", Shortcut: "ctrl+x c"},
 			},
 		},
 		{
 			Name: "Output",
 			Commands: []CommandData{
 				{Command: CommandFormat, Type: CommandTypeNavigation, Name: "Format", Shortcut: "ctrl+x f"},
-				{Command: CommandModifiers, Type: CommandTypeSelection, Name: "Modifiers", Shortcut: "ctrl+x m"},
-				{Command: CommandToggleWrap, Type: CommandTypeToggle, Name: "Toggle wrap", Shortcut: "ctrl+x w"},
+				{Command: CommandModifiers, Type: CommandTypeNavigation, Name: "Modifiers", Shortcut: "ctrl+x m"},
+				{Command: CommandToggleWrap, Type: CommandTypeAction, Name: "Toggle wrap", Shortcut: "ctrl+x w"},
 			},
 		},
 		{
 			Name: "Connection",
 			Commands: []CommandData{
 				{Command: CommandReconnect, Type: CommandTypeAction, Name: "Reconnect", Shortcut: "ctrl+x r"},
-				{Command: CommandDevices, Type: CommandTypeAction, Name: "Devices", Shortcut: "ctrl+x d"},
+				{Command: CommandDevices, Type: CommandTypeNavigation, Name: "Devices", Shortcut: "ctrl+x d"},
 			},
 		},
 		{

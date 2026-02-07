@@ -142,6 +142,11 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		m.showCommandDialog = false
 		return m, nil
 
+	case commandui.CommandDialogLevelSelectedMsg:
+		m.showCommandDialog = false
+		m.filter.Level = msg.Level
+		return m, func() tea.Msg { return tui.ReconnectLogcatCmd{} }
+
 	case commandui.CommandDialogSelectMsg:
 		m.showCommandDialog = false
 		switch msg.Command {
