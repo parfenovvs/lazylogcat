@@ -13,14 +13,19 @@ import (
 
 type CommandDialogCloseMsg struct{}
 
+type CommandDialogSelectMsg struct {
+	Command model.Command
+}
+
 var dialogStyle = func() lipgloss.Style {
 	return theme.ActivePanel().
 		Padding(1, 2)
 }
 
 type CommandDialogModel struct {
-	table    table.Model
-	skipRows map[int]bool
+	table      table.Model
+	skipRows   map[int]bool
+	commandMap map[int]model.Command
 }
 
 func NewDialog(filter model.Filter, format model.Format, softWrap bool) CommandDialogModel {
@@ -67,6 +72,7 @@ func NewDialog(filter model.Filter, format model.Format, softWrap bool) CommandD
 	}
 
 	skipRows := make(map[int]bool)
+	commandMap := make(map[int]model.Command)
 	var rows []table.Row
 	for i, group := range model.Commands() {
 		if i > 0 {
@@ -77,6 +83,7 @@ func NewDialog(filter model.Filter, format model.Format, softWrap bool) CommandD
 		groupName := lipgloss.NewStyle().Bold(true).Render(group.Name)
 		rows = append(rows, table.Row{groupName, "", ""})
 		for _, cmd := range group.Commands {
+			commandMap[len(rows)] = cmd.Command
 			value := truncateMiddle(resolveValue(cmd.Command), 10)
 			rows = append(rows, table.Row{cmd.Name, value, cmd.Shortcut})
 		}
@@ -106,8 +113,9 @@ func NewDialog(filter model.Filter, format model.Format, softWrap bool) CommandD
 	t.SetCursor(1) // Skip the first group header
 
 	return CommandDialogModel{
-		table:    t,
-		skipRows: skipRows,
+		table:      t,
+		skipRows:   skipRows,
+		commandMap: commandMap,
 	}
 }
 
@@ -117,6 +125,13 @@ func (m CommandDialogModel) Update(msg tea.Msg) (CommandDialogModel, tea.Cmd) {
 		key := msg.String()
 		if key == "ctrl+p" || key == "esc" {
 			return m, func() tea.Msg { return CommandDialogCloseMsg{} }
+		}
+
+		if key == "enter" {
+			if cmd, ok := m.commandMap[m.table.Cursor()]; ok {
+				return m, func() tea.Msg { return CommandDialogSelectMsg{Command: cmd} }
+			}
+			return m, nil
 		}
 
 		prevCursor := m.table.Cursor()
