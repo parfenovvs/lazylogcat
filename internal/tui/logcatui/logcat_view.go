@@ -67,6 +67,7 @@ type LogcatViewModel struct {
 	softWrap          bool
 	err               error
 	awaitingShortcut  bool
+	toast             tui.ToastModel
 	showCommandDialog bool
 	commandDialog     commandui.CommandDialogModel
 	deviceRequired    bool
@@ -90,6 +91,7 @@ type batchTickMsg struct{}
 type updateResult struct {
 	cmd         tea.Cmd
 	needsRender bool
+	consumed    bool // when true, the key is fully handled and must not be forwarded to the viewport
 }
 
 func readNext(m LogcatViewModel) tea.Msg {
@@ -147,6 +149,7 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		cmds        []tea.Cmd
 		needsRender bool
 		gotoBottom  bool
+		keyConsumed bool
 	)
 
 	switch msg := msg.(type) {
@@ -221,10 +224,14 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		}
 		return m, nil
 
+	case tui.ToastExpiredMsg:
+		m.toast.Update(msg)
+
 	case tea.KeyMsg:
 		result := m.handleKeyMsg(msg)
 		cmd = result.cmd
 		needsRender = result.needsRender
+		keyConsumed = result.consumed
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}
@@ -305,7 +312,7 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 	}
 
 	// Viewport update for non-visual mode scrolling (skip internal tick messages)
-	if !m.visualMode && !m.showCommandDialog && !m.awaitingShortcut {
+	if !m.visualMode && !m.showCommandDialog && !m.awaitingShortcut && !keyConsumed {
 		if _, isBatchTick := msg.(batchTickMsg); !isBatchTick {
 			m.viewport, cmd = m.viewport.Update(msg)
 			cmds = append(cmds, cmd)
@@ -376,7 +383,9 @@ func (m *LogcatViewModel) handleKeyMsg(msg tea.KeyMsg) updateResult {
 	// When awaiting the second key of a ctrl+x shortcut
 	if m.awaitingShortcut {
 		m.awaitingShortcut = false
-		return m.handleShortcutKey(key)
+		result := m.handleShortcutKey(key)
+		result.consumed = true
+		return result
 	}
 
 	// Try global keys first (work in both modes)
@@ -449,7 +458,8 @@ func (m *LogcatViewModel) handleNormalModeKey(key string) updateResult {
 func (m *LogcatViewModel) handleShortcutKey(key string) updateResult {
 	cmdData, ok := shortcutMap[key]
 	if !ok {
-		return updateResult{}
+		cmd := m.toast.Show("Unknown shortcut: ctrl+x " + key)
+		return updateResult{cmd: cmd}
 	}
 
 	// Action commands execute immediately without opening a dialog
@@ -641,11 +651,34 @@ func (m LogcatViewModel) headerView() string {
 		name = "No device"
 	}
 	deviceName := lipgloss.NewStyle().Bold(true).Render(name)
-	headerText := titleStyle.Render(fmt.Sprintf("%s | %s%s%s", deviceName, format, modsStr, filtersStr))
+
+	leftContent := fmt.Sprintf("%s | %s%s", deviceName, format, modsStr)
+
+	// lipgloss Width sets the inner content width; border (2) + padding (2) = 4 chars overhead
+	style := titleStyle.Width(m.viewport.Width - 2)
+
+	// When the toast is visible, place it right-aligned on the first line.
+	// The border (2) + padding (2) = 4 chars of horizontal overhead.
+	toastStr := m.toast.View()
+	if toastStr != "" {
+		innerWidth := m.viewport.Width - 4
+		leftWidth := lipgloss.Width(leftContent)
+		rightWidth := innerWidth - leftWidth
+		if rightWidth > 0 {
+			rightPart := lipgloss.NewStyle().
+				Width(rightWidth).
+				AlignHorizontal(lipgloss.Right).
+				Render(toastStr)
+			firstLine := leftContent + rightPart
+			return style.Render(firstLine + filtersStr)
+		}
+	}
+
+	headerText := style.Render(fmt.Sprintf("%s%s", leftContent, filtersStr))
 	width := lipgloss.Width(headerText)
 
 	if width > m.viewport.Width {
-		headerText = titleStyle.Render(fmt.Sprintf("%s | ...", deviceName))
+		headerText = style.Render(fmt.Sprintf("%s | ...", deviceName))
 	}
 
 	return headerText
