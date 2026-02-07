@@ -27,14 +27,14 @@ var (
 			Padding(0, 1)
 	}()
 
-	helpTextNormal = "ctrl+f filters • ctrl+d devices • L toggle level • G jump to recent • C clear • v visual"
+	helpTextNormal = "ctrl+f filters • ctrl+p commands • L toggle level • G jump to recent • C clear • v visual"
 	helpTextVisual = "j/↓ down • k/↑ up • V select multiple • y copy • esc exit visual"
 )
 
 type LogcatViewModel struct {
 	parentSize        model.Size
 	viewport          viewport.Model
-	device            model.Device
+	device            *model.Device
 	filter            model.Filter
 	format            model.Format
 	log               *util.RingBuffer
@@ -46,6 +46,7 @@ type LogcatViewModel struct {
 	err               error
 	showCommandDialog bool
 	commandDialog     commandui.CommandDialogModel
+	deviceRequired    bool
 }
 
 type logcatMsg struct {
@@ -97,15 +98,16 @@ func tickForBatch() tea.Cmd {
 	})
 }
 
-func New(parentSize model.Size, device model.Device, filter model.Filter, format model.Format) LogcatViewModel {
+func New(parentSize model.Size, device *model.Device, filter model.Filter, format model.Format) LogcatViewModel {
 	m := LogcatViewModel{
-		parentSize:    parentSize,
-		device:        device,
-		log:           util.NewRingBuffer(maxLogLines),
-		softWrap:      true,
-		startSelected: -1,
-		filter:        filter,
-		format:        format,
+		parentSize:     parentSize,
+		device:         device,
+		deviceRequired: device == nil,
+		log:            util.NewRingBuffer(maxLogLines),
+		softWrap:       true,
+		startSelected:  -1,
+		filter:         filter,
+		format:         format,
 	}
 
 	headerHeight := lipgloss.Height(m.headerView())
@@ -139,6 +141,9 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		needsRender = true
 
 	case commandui.CommandDialogCloseMsg:
+		if m.deviceRequired {
+			return m, nil // Cannot close dialog until a device is selected
+		}
 		m.showCommandDialog = false
 		return m, nil
 
@@ -151,6 +156,13 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		m.showCommandDialog = false
 		m.format.SelectedFormat = msg.Format
 		return m, func() tea.Msg { return tui.ReconnectLogcatCmd{} }
+
+	case commandui.CommandDialogDeviceSelectedMsg:
+		m.showCommandDialog = false
+		m.deviceRequired = false
+		return m, func() tea.Msg {
+			return tui.DeviceSelectedMsg{Device: msg.Device}
+		}
 
 	case commandui.CommandDialogSelectMsg:
 		m.showCommandDialog = false
@@ -172,7 +184,15 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 
+	case tui.ShowDeviceDialogCmd:
+		m.showCommandDialog = true
+		m.commandDialog = commandui.NewDeviceDialog(m.device)
+		return m, nil
+
 	case tui.ReconnectLogcatCmd:
+		if m.device == nil {
+			return m, nil // No device selected, nothing to connect
+		}
 		util.CloseLogcat()
 		m.log = util.NewRingBuffer(maxLogLines)
 		m.pendingLogs = nil
@@ -323,12 +343,10 @@ func (m *LogcatViewModel) handleKeyMsg(msg tea.KeyMsg) updateResult {
 // handleGlobalKey handles keys that work in both normal and visual modes
 func (m *LogcatViewModel) handleGlobalKey(key string) (updateResult, bool) {
 	switch key {
-	case "ctrl+d":
-		return updateResult{
-			cmd: func() tea.Msg { return tui.NavigateToDevicesCmd{} },
-		}, true
-
 	case "ctrl+f":
+		if m.device == nil {
+			return updateResult{}, true // No device, ignore filter shortcut
+		}
 		return updateResult{
 			cmd: func() tea.Msg { return tui.NavigateToFilterCmd{} },
 		}, true
@@ -367,7 +385,7 @@ func (m *LogcatViewModel) handleNormalModeKey(key string) updateResult {
 
 	case "ctrl+p":
 		m.showCommandDialog = true
-		m.commandDialog = commandui.NewDialog(m.filter, m.format, m.softWrap)
+		m.commandDialog = commandui.NewDialog(m.filter, m.format, m.softWrap, m.device)
 		return updateResult{needsRender: true}
 	}
 
@@ -520,7 +538,13 @@ func (m LogcatViewModel) headerView() string {
 		filtersStr = fmt.Sprintf("\n%s", strings.Join(filters, " | "))
 	}
 
-	deviceName := lipgloss.NewStyle().Bold(true).Render(m.device.Name)
+	var name string
+	if m.device != nil {
+		name = m.device.Name
+	} else {
+		name = "No device"
+	}
+	deviceName := lipgloss.NewStyle().Bold(true).Render(name)
 	headerText := titleStyle.Render(fmt.Sprintf("%s | %s%s%s", deviceName, format, modsStr, filtersStr))
 	width := lipgloss.Width(headerText)
 

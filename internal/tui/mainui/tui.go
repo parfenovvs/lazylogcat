@@ -1,12 +1,13 @@
 package mainui
 
 import (
+	"log/slog"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/parfenovvs/lazylogcat/internal/config"
 	"github.com/parfenovvs/lazylogcat/internal/model"
 	"github.com/parfenovvs/lazylogcat/internal/tui"
-	"github.com/parfenovvs/lazylogcat/internal/tui/devicesui"
 	"github.com/parfenovvs/lazylogcat/internal/tui/filterui"
 	"github.com/parfenovvs/lazylogcat/internal/tui/logcatui"
 	"github.com/parfenovvs/lazylogcat/internal/util"
@@ -17,8 +18,7 @@ var style = lipgloss.NewStyle()
 type sessionState int
 
 const (
-	devicesView sessionState = iota
-	logcatView
+	logcatView sessionState = iota
 	filterView
 )
 
@@ -27,20 +27,26 @@ type MainModel struct {
 
 	state sessionState
 
-	currentDevice *model.Device
-	filter        model.Filter
-	format        model.Format
+	currentDevice  *model.Device
+	deviceRequired bool
+	filter         model.Filter
+	format         model.Format
 
-	devicesView devicesui.DevicesViewModel
-	logcatView  logcatui.LogcatViewModel
-	filterView  filterui.FilterViewModel
+	logcatView logcatui.LogcatViewModel
+	filterView filterui.FilterViewModel
 }
 
 func InitMainModel(c config.Config) MainModel {
 	var m MainModel
 
 	devices, err := util.GetConnectedDevices()
-	if err == nil && len(devices) > 0 {
+	if err != nil {
+		slog.Error("Failed to get connected devices", "error", err)
+	}
+
+	// Device resolution:
+	// 1. If config has a device_id, try to find it among connected devices
+	if err == nil && len(devices) > 0 && c.Session.DeviceId != "" {
 		for _, d := range devices {
 			if d.Id == c.Session.DeviceId {
 				m.currentDevice = &d
@@ -49,6 +55,23 @@ func InitMainModel(c config.Config) MainModel {
 		}
 	}
 
+	// 2. If config device not found, but devices exist, use first available
+	if m.currentDevice == nil && err == nil && len(devices) > 0 {
+		if c.Session.DeviceId != "" {
+			// Config specified a device that's not connected - show device dialog
+			m.deviceRequired = true
+		}
+		if !m.deviceRequired {
+			m.currentDevice = &devices[0]
+		}
+	}
+
+	// 3. No devices at all - show device dialog
+	if m.currentDevice == nil && !m.deviceRequired {
+		m.deviceRequired = true
+	}
+
+	// Clear package filter if no device selected
 	if m.currentDevice == nil {
 		c.Session.Pkg = ""
 	}
@@ -62,22 +85,20 @@ func InitMainModel(c config.Config) MainModel {
 	m.filter = util.FilterFromConfig(&c)
 	m.format = util.FormatFromConfig(&c)
 
-	if m.currentDevice == nil {
-		m.state = devicesView
-		m.devicesView = devicesui.New(m.windowSize)
-	} else {
-		m.state = logcatView
-		m.logcatView = logcatui.New(m.windowSize, *m.currentDevice, m.filter, m.format)
-	}
+	// Always start in logcat view
+	m.state = logcatView
+	m.logcatView = logcatui.New(m.windowSize, m.currentDevice, m.filter, m.format)
 
 	return m
 }
 
 func (m MainModel) Init() tea.Cmd {
-	return func() tea.Msg {
-		if m.state == devicesView {
-			return devicesui.GetDevices(nil)
+	if m.deviceRequired {
+		return func() tea.Msg {
+			return tui.ShowDeviceDialogCmd{}
 		}
+	}
+	return func() tea.Msg {
 		return tui.ReconnectLogcatCmd{}
 	}
 }
@@ -105,8 +126,9 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.windowSize
 		}
 
-	case devicesui.DeviceSelectedMsg:
+	case tui.DeviceSelectedMsg:
 		m.currentDevice = &msg.Device
+		m.deviceRequired = false
 		return m, func() tea.Msg {
 			return tui.NavigateToLogcatCmd{}
 		}
@@ -131,27 +153,13 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tui.NavigateToLogcatCmd:
 		m.state = logcatView
 		logcatui.Close(&m.logcatView)
-		m.logcatView = logcatui.New(m.windowSize, *m.currentDevice, m.filter, m.format)
+		m.logcatView = logcatui.New(m.windowSize, m.currentDevice, m.filter, m.format)
 		return m, func() tea.Msg {
 			return tui.ReconnectLogcatCmd{}
 		}
-
-	case tui.NavigateToDevicesCmd:
-		logcatui.Close(&m.logcatView)
-		m.state = devicesView
-		return m, tea.Batch(func() tea.Msg {
-			return devicesui.GetDevices(m.currentDevice)
-		}, func() tea.Msg {
-			return m.windowSize
-		})
 	}
 
 	switch m.state {
-	case devicesView:
-		newDeviceSelection, newCmd := m.devicesView.Update(msg)
-		m.devicesView = newDeviceSelection
-		cmd = newCmd
-
 	case logcatView:
 		newLogcatViewing, newCmd := m.logcatView.Update(msg)
 		m.logcatView = newLogcatViewing
@@ -175,8 +183,6 @@ func (m MainModel) View() string {
 	var content string
 
 	switch m.state {
-	case devicesView:
-		content = m.devicesView.View()
 	case logcatView:
 		content = m.logcatView.View()
 	case filterView:

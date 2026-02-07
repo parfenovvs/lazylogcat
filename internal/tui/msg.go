@@ -4,18 +4,15 @@ import "github.com/parfenovvs/lazylogcat/internal/model"
 
 type MeasureCmd struct{}
 
-type NavigateToDevicesCmd struct{}
-
 type NavigateToLogcatCmd struct{}
 
 type NavigateToFilterCmd struct{}
 
-type LoadDevicesCmd struct{}
-
-type DevicesLoadedMsg struct {
-	Devices  []model.Device
-	Selected *model.Device
+type DeviceSelectedMsg struct {
+	Device model.Device
 }
+
+type ShowDeviceDialogCmd struct{}
 
 type UpdateFilterCmd struct {
 	Filter model.Filter

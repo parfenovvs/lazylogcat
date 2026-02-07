@@ -23,6 +23,7 @@ const (
 	stateCommands dialogState = iota
 	stateLogLevel
 	stateFormat
+	stateDevices
 )
 
 var dialogStyle = func() lipgloss.Style {
@@ -41,9 +42,14 @@ type CommandDialogModel struct {
 
 	formatTable table.Model
 	formatMap   map[int]string
+
+	deviceTable    table.Model
+	deviceMap      map[int]model.Device
+	selectedDevice *model.Device
+	deviceErr      error
 }
 
-func NewDialog(filter model.Filter, format model.Format, softWrap bool) CommandDialogModel {
+func NewDialog(filter model.Filter, format model.Format, softWrap bool, selectedDevice *model.Device) CommandDialogModel {
 	resolveValue := func(cmd model.Command) string {
 		switch cmd {
 		case model.CommandPackage:
@@ -75,6 +81,11 @@ func NewDialog(filter model.Filter, format model.Format, softWrap bool) CommandD
 				return "on"
 			}
 			return "off"
+		case model.CommandDevices:
+			if selectedDevice != nil {
+				return selectedDevice.Name
+			}
+			return ""
 		default:
 			return ""
 		}
@@ -115,14 +126,27 @@ func NewDialog(filter model.Filter, format model.Format, softWrap bool) CommandD
 	formatTable, formatMap := newFormatTable(format.Value())
 
 	return CommandDialogModel{
-		state:       stateCommands,
-		table:       t,
-		skipRows:    skipRows,
-		commandMap:  commandMap,
-		levelTable:  levelTable,
-		levelMap:    levelMap,
-		formatTable: formatTable,
-		formatMap:   formatMap,
+		state:          stateCommands,
+		table:          t,
+		skipRows:       skipRows,
+		commandMap:     commandMap,
+		levelTable:     levelTable,
+		levelMap:       levelMap,
+		formatTable:    formatTable,
+		formatMap:      formatMap,
+		selectedDevice: selectedDevice,
+	}
+}
+
+// NewDeviceDialog creates a command dialog that opens directly in the device selection state.
+func NewDeviceDialog(selectedDevice *model.Device) CommandDialogModel {
+	deviceTable, deviceMap, err := loadDevices(selectedDevice)
+	return CommandDialogModel{
+		state:          stateDevices,
+		deviceTable:    deviceTable,
+		deviceMap:      deviceMap,
+		deviceErr:      err,
+		selectedDevice: selectedDevice,
 	}
 }
 
@@ -141,6 +165,8 @@ func (m CommandDialogModel) Update(msg tea.Msg) (CommandDialogModel, tea.Cmd) {
 			return m.updateLogLevel(msg, key)
 		case stateFormat:
 			return m.updateFormat(msg, key)
+		case stateDevices:
+			return m.updateDevices(msg, key)
 		}
 	}
 
@@ -156,6 +182,14 @@ func (m CommandDialogModel) updateCommands(msg tea.KeyMsg, key string) (CommandD
 			}
 			if cmdData.Type == model.CommandTypeNavigation && cmdData.Command == model.CommandFormat {
 				m.state = stateFormat
+				return m, nil
+			}
+			if cmdData.Type == model.CommandTypeNavigation && cmdData.Command == model.CommandDevices {
+				deviceTable, deviceMap, err := loadDevices(m.selectedDevice)
+				m.deviceTable = deviceTable
+				m.deviceMap = deviceMap
+				m.deviceErr = err
+				m.state = stateDevices
 				return m, nil
 			}
 			return m, func() tea.Msg { return CommandDialogSelectMsg{Command: cmdData.Command} }
@@ -193,6 +227,8 @@ func (m CommandDialogModel) View() string {
 		return m.viewLogLevel()
 	case stateFormat:
 		return m.viewFormat()
+	case stateDevices:
+		return m.viewDevices()
 	default:
 		return m.viewCommands()
 	}
