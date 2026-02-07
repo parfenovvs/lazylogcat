@@ -98,13 +98,13 @@ func tickForBatch() tea.Cmd {
 	})
 }
 
-func New(parentSize model.Size, device *model.Device, filter model.Filter, format model.Format) LogcatViewModel {
+func New(parentSize model.Size, device *model.Device, filter model.Filter, format model.Format, softWrap bool) LogcatViewModel {
 	m := LogcatViewModel{
 		parentSize:     parentSize,
 		device:         device,
 		deviceRequired: device == nil,
 		log:            util.NewRingBuffer(maxLogLines),
-		softWrap:       true,
+		softWrap:       softWrap,
 		startSelected:  -1,
 		filter:         filter,
 		format:         format,
@@ -166,7 +166,7 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		m.showCommandDialog = false
 		m.deviceRequired = false
 		return m, func() tea.Msg {
-			return tui.DeviceSelectedMsg{Device: msg.Device}
+			return tui.DeviceSelectedMsg{Device: msg.Device, Filter: m.filter, Format: m.format, SoftWrap: m.softWrap}
 		}
 
 	case commandui.CommandDialogTextInputAppliedMsg:

@@ -9,7 +9,10 @@ type NavigateToLogcatCmd struct{}
 type NavigateToFilterCmd struct{}
 
 type DeviceSelectedMsg struct {
-	Device model.Device
+	Device   model.Device
+	Filter   model.Filter
+	Format   model.Format
+	SoftWrap bool
 }
 
 type ShowDeviceDialogCmd struct{}
