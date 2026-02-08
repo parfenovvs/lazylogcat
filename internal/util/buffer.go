@@ -1,9 +1,13 @@
 package util
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/parfenovvs/lazylogcat/internal/model"
+)
 
 type RingBuffer struct {
-	lines    []string
+	lines    []model.LogLine
 	head     int
 	size     int
 	capacity int
@@ -15,14 +19,14 @@ func NewRingBuffer(capacity int) *RingBuffer {
 		panic("capacity must be greater than 0")
 	}
 	return &RingBuffer{
-		lines:    make([]string, capacity),
+		lines:    make([]model.LogLine, capacity),
 		head:     0,
 		size:     0,
 		capacity: capacity,
 	}
 }
 
-func (b *RingBuffer) Append(l string) {
+func (b *RingBuffer) Append(l model.LogLine) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.lines[b.head] = l
@@ -32,14 +36,14 @@ func (b *RingBuffer) Append(l string) {
 	}
 }
 
-func (b *RingBuffer) Recent(n int) []string {
+func (b *RingBuffer) Recent(n int) []model.LogLine {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	if b.size == 0 {
-		return []string{}
+		return []model.LogLine{}
 	}
 	n = min(n, b.size)
-	result := make([]string, n)
+	result := make([]model.LogLine, n)
 	if b.size < b.capacity {
 		copy(result, b.lines[b.head-n:b.head])
 		return result
@@ -51,7 +55,7 @@ func (b *RingBuffer) Recent(n int) []string {
 	return result
 }
 
-func (b *RingBuffer) All() []string {
+func (b *RingBuffer) All() []model.LogLine {
 	return b.Recent(b.size)
 }
 
@@ -64,7 +68,7 @@ func (b *RingBuffer) Size() int {
 func (b *RingBuffer) Clear() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	b.lines = make([]string, b.capacity)
+	b.lines = make([]model.LogLine, b.capacity)
 	b.size = 0
 	b.head = 0
 }

@@ -62,53 +62,7 @@ func GetConnectedDevices() ([]model.Device, error) {
 }
 
 func ConnectLogcat(deviceId string, filter model.Filter, format model.Format) error {
-	args := []string{"-s", deviceId, "logcat", "-T", strconv.Itoa(initialLogLinesCount)}
-
-	if filter.PackageName != "" {
-		pidStr, err := GetPidByPackageName(deviceId, filter.PackageName)
-		if err != nil {
-			return fmt.Errorf("failed to get pid by package name: %w", err)
-		}
-		if len(pidStr) > 0 {
-			args = append(args, fmt.Sprintf("--pid=%s", pidStr))
-		}
-	}
-
-	if !format.IsEmpty() {
-		args = append(args, "-v")
-		var formats []string
-
-		formatValue := format.Value()
-		if formatValue != "" {
-			formats = append(formats, formatValue)
-		}
-
-		formats = append(formats, format.Modifiers()...)
-
-		colorless := make([]string, 0, len(formats))
-		for _, f := range formats {
-			if f != "color" {
-				colorless = append(colorless, f)
-			}
-		}
-		formats = colorless
-
-		if len(formats) > 0 {
-			args = append(args, strings.Join(formats, ","))
-		}
-	}
-
-	tag := "*"
-	if filter.Tag != "" {
-		tag = filter.Tag
-		args = append(args, "-s")
-	}
-
-	lvl := filter.Level
-	if lvl == "" {
-		lvl = model.LvlD
-	}
-	args = append(args, fmt.Sprintf("%s:%s", tag, lvl))
+	args := []string{"-s", deviceId, "logcat", "-T", strconv.Itoa(initialLogLinesCount), "-v", "threadtime"}
 
 	slog.Debug("Executing adb logcat command", "args", args)
 

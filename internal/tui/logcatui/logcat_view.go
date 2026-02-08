@@ -61,7 +61,7 @@ type LogcatViewModel struct {
 	filter            model.Filter
 	format            model.Format
 	log               *util.RingBuffer
-	pendingLogs       []string
+	pendingLogs       []model.LogLine
 	visualMode        bool
 	currentLine       int
 	startSelected     int
@@ -75,7 +75,7 @@ type LogcatViewModel struct {
 }
 
 type logcatMsg struct {
-	Line string
+	Line model.LogLine
 }
 
 type logcatEmptyMsg struct{}
@@ -96,7 +96,7 @@ type updateResult struct {
 }
 
 func readNext(m LogcatViewModel) tea.Msg {
-	line, err := util.ReadNextLogLine()
+	raw, err := util.ReadNextLogLine()
 	if err != nil {
 		if errors.Is(err, io.EOF) {
 			return nil // End of stream
@@ -106,16 +106,16 @@ func readNext(m LogcatViewModel) tea.Msg {
 	}
 
 	// Filter empty lines (allowed in long format)
-	if !m.format.IsFormatValue("long") && strings.Trim(line, "\n\r ") == "" {
+	if !m.format.IsFormatValue("long") && strings.Trim(raw, "\n\r ") == "" {
 		return logcatEmptyMsg{}
 	}
 
 	// Filter by text search (case-insensitive)
-	if m.filter.Text != "" && !strings.Contains(strings.ToLower(line), strings.ToLower(m.filter.Text)) {
+	if m.filter.Text != "" && !strings.Contains(strings.ToLower(raw), strings.ToLower(m.filter.Text)) {
 		return logcatEmptyMsg{}
 	}
 
-	return logcatMsg{Line: line}
+	return logcatMsg{Line: model.ParseLogLine(raw)}
 }
 
 func tickForBatch() tea.Cmd {
@@ -289,7 +289,7 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		if !m.visualMode && len(m.pendingLogs) > 0 {
 			wasAtBottom := m.viewport.AtBottom()
 			for _, line := range m.pendingLogs {
-				m.log.Append(line + "\n")
+				m.log.Append(line)
 			}
 			m.pendingLogs = nil
 			needsRender = true
@@ -326,7 +326,8 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 func (m *LogcatViewModel) Render() {
 	var b strings.Builder
 	logs := m.log.All()
-	for i, msg := range logs {
+	for i, logLine := range logs {
+		line := logLine.String()
 		if m.visualMode {
 			selected := false
 			if m.startSelected >= 0 {
@@ -336,7 +337,6 @@ func (m *LogcatViewModel) Render() {
 			} else if i == m.currentLine {
 				selected = true
 			}
-			line := strings.TrimSuffix(msg, "\n")
 			if selected {
 				styled := lipgloss.NewStyle().
 					Background(theme.ColorVisualBG).
@@ -349,9 +349,12 @@ func (m *LogcatViewModel) Render() {
 			}
 		}
 		if m.format.IsModifierActive("color") {
-			line := strings.TrimSuffix(msg, "\n")
+			level := logLine.Level
+			if level == "" {
+				level = util.GetLogLevel(line, m.format)
+			}
 			style := lipgloss.NewStyle().
-				Foreground(theme.GetLogColor(util.GetLogLevel(line, m.format)))
+				Foreground(theme.GetLogColor(level))
 			if m.softWrap {
 				style = style.Width(m.viewport.Width)
 			}
@@ -359,7 +362,8 @@ func (m *LogcatViewModel) Render() {
 			b.WriteString(styled)
 			b.WriteString("\n")
 		} else {
-			b.WriteString(msg)
+			b.WriteString(line)
+			b.WriteString("\n")
 		}
 	}
 	wrapped := b.String()
@@ -521,14 +525,14 @@ func (m *LogcatViewModel) handleVisualModeKey(key string) updateResult {
 				var lines []string
 				logs := m.log.Recent(m.log.Size() - start)
 				for i := 0; i <= end-start; i++ {
-					lines = append(lines, strings.TrimSpace(logs[i]))
+					lines = append(lines, strings.TrimSpace(logs[i].String()))
 				}
 				err = util.CopyToClipboard(lines...)
 				m.startSelected = -1
 				return updateResult{needsRender: true}
 			} else {
 				logs := m.log.Recent(m.log.Size() - m.currentLine)
-				lineText := strings.TrimSpace(logs[0])
+				lineText := strings.TrimSpace(logs[0].String())
 				err = util.CopyToClipboard(lineText)
 			}
 			if err != nil {
@@ -566,7 +570,7 @@ func (m *LogcatViewModel) ensureLineVisible() {
 	logs := m.log.All()
 	linesUpToCurrent := 0
 	for i := 0; i <= m.currentLine; i++ {
-		line := strings.TrimSuffix(logs[i], "\n")
+		line := logs[i].String()
 		if m.softWrap || (m.startSelected != -1 && i >= min && i <= max) {
 			linesUpToCurrent += lipgloss.Height(lipgloss.NewStyle().Width(m.viewport.Width).Render(line))
 		} else {
