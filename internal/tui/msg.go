@@ -9,7 +9,7 @@ type NavigateToLogcatCmd struct{}
 type DeviceSelectedMsg struct {
 	Device   model.Device
 	Filter   model.Filter
-	Format   model.Format
+	Color    bool
 	SoftWrap bool
 }
 

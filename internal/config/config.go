@@ -18,8 +18,7 @@ type Config struct {
 
 // Display holds user preferences for log output appearance.
 type Display struct {
-	Format    string   `json:"log_format,omitempty"`
-	Modifiers []string `json:"log_modifiers,omitempty"`
+	Color *bool `json:"color,omitempty"`
 }
 
 // Filter holds log filtering parameters.
@@ -64,10 +63,10 @@ func (f TextFilter) MarshalJSON() ([]byte, error) {
 
 // DefaultConfig returns the default configuration with sensible defaults.
 func DefaultConfig() Config {
+	color := true
 	return Config{
 		Display: Display{
-			Format:    "time",
-			Modifiers: []string{"color"},
+			Color: &color,
 		},
 	}
 }
@@ -151,11 +150,8 @@ func merge(base, overlay Config) Config {
 	result := base
 
 	// Display
-	if overlay.Display.Format != "" {
-		result.Display.Format = overlay.Display.Format
-	}
-	if overlay.Display.Modifiers != nil {
-		result.Display.Modifiers = overlay.Display.Modifiers
+	if overlay.Display.Color != nil {
+		result.Display.Color = overlay.Display.Color
 	}
 
 	// Filter

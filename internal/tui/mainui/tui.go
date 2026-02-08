@@ -28,7 +28,7 @@ type MainModel struct {
 	currentDevice  *model.Device
 	deviceRequired bool
 	filter         model.Filter
-	format         model.Format
+	color          bool
 	softWrap       bool
 
 	logcatView logcatui.LogcatViewModel
@@ -61,12 +61,12 @@ func InitMainModel(c config.Config) MainModel {
 	}
 
 	m.filter = util.FilterFromConfig(&c)
-	m.format = util.FormatFromConfig(&c)
+	m.color = util.ColorFromConfig(&c)
 	m.softWrap = true
 
 	// Always start in logcat view
 	m.state = logcatView
-	m.logcatView = logcatui.New(m.windowSize, m.currentDevice, m.filter, m.format, m.softWrap)
+	m.logcatView = logcatui.New(m.windowSize, m.currentDevice, m.filter, m.color, m.softWrap)
 
 	return m
 }
@@ -113,7 +113,7 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.currentDevice = &msg.Device
 		m.deviceRequired = false
 		m.filter = msg.Filter
-		m.format = msg.Format
+		m.color = msg.Color
 		m.softWrap = msg.SoftWrap
 		// Clear package filter if the package doesn't exist on the new device
 		if m.filter.PackageName != "" {
@@ -128,7 +128,7 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tui.NavigateToLogcatCmd:
 		m.state = logcatView
 		logcatui.Close(&m.logcatView)
-		m.logcatView = logcatui.New(m.windowSize, m.currentDevice, m.filter, m.format, m.softWrap)
+		m.logcatView = logcatui.New(m.windowSize, m.currentDevice, m.filter, m.color, m.softWrap)
 		return m, func() tea.Msg {
 			return tui.ReconnectLogcatCmd{}
 		}

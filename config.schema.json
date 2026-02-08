@@ -15,41 +15,10 @@
       "description": "Log output appearance settings.",
       "additionalProperties": false,
       "properties": {
-        "log_format": {
-          "type": "string",
-          "description": "Logcat output format passed to adb logcat -v.",
-          "enum": [
-            "brief",
-            "long",
-            "process",
-            "raw",
-            "tag",
-            "thread",
-            "threadtime",
-            "time"
-          ],
-          "default": "time"
-        },
-        "log_modifiers": {
-          "type": "array",
-          "description": "Format modifiers appended to the logcat -v flag.",
-          "items": {
-            "type": "string",
-            "enum": [
-              "color",
-              "descriptive",
-              "epoch",
-              "monotonic",
-              "printable",
-              "uid",
-              "usec",
-              "UTC",
-              "year",
-              "zone"
-            ]
-          },
-          "uniqueItems": true,
-          "default": ["color"]
+        "color": {
+          "type": "boolean",
+          "description": "Enable log colorization by level.",
+          "default": true
         }
       }
     },

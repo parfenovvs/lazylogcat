@@ -59,7 +59,7 @@ type LogcatViewModel struct {
 	viewport          viewport.Model
 	device            *model.Device
 	filter            model.Filter
-	format            model.Format
+	color             bool
 	log               *util.RingBuffer
 	pendingLogs       []model.LogLine
 	visualMode        bool
@@ -105,8 +105,8 @@ func readNext(m LogcatViewModel) tea.Msg {
 		return nil
 	}
 
-	// Filter empty lines (allowed in long format)
-	if !m.format.IsFormatValue("long") && strings.Trim(raw, "\n\r ") == "" {
+	// Filter empty lines (threadtime format never produces meaningful empty lines)
+	if strings.Trim(raw, "\n\r ") == "" {
 		return logcatEmptyMsg{}
 	}
 
@@ -124,7 +124,7 @@ func tickForBatch() tea.Cmd {
 	})
 }
 
-func New(parentSize model.Size, device *model.Device, filter model.Filter, format model.Format, softWrap bool) LogcatViewModel {
+func New(parentSize model.Size, device *model.Device, filter model.Filter, color bool, softWrap bool) LogcatViewModel {
 	m := LogcatViewModel{
 		parentSize:     parentSize,
 		device:         device,
@@ -133,7 +133,7 @@ func New(parentSize model.Size, device *model.Device, filter model.Filter, forma
 		softWrap:       softWrap,
 		startSelected:  -1,
 		filter:         filter,
-		format:         format,
+		color:          color,
 	}
 
 	headerHeight := lipgloss.Height(m.headerView())
@@ -179,21 +179,11 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		m.filter.Level = msg.Level
 		return m, func() tea.Msg { return tui.ReconnectLogcatCmd{} }
 
-	case commandui.CommandDialogFormatSelectedMsg:
-		m.showCommandDialog = false
-		m.format.SelectedFormat = msg.Format
-		return m, func() tea.Msg { return tui.ReconnectLogcatCmd{} }
-
-	case commandui.CommandDialogModifiersSelectedMsg:
-		m.showCommandDialog = false
-		m.format.ActiveModifiers = msg.Modifiers
-		return m, func() tea.Msg { return tui.ReconnectLogcatCmd{} }
-
 	case commandui.CommandDialogDeviceSelectedMsg:
 		m.showCommandDialog = false
 		m.deviceRequired = false
 		return m, func() tea.Msg {
-			return tui.DeviceSelectedMsg{Device: msg.Device, Filter: m.filter, Format: m.format, SoftWrap: m.softWrap}
+			return tui.DeviceSelectedMsg{Device: msg.Device, Filter: m.filter, Color: m.color, SoftWrap: m.softWrap}
 		}
 
 	case commandui.CommandDialogTextInputAppliedMsg:
@@ -217,6 +207,10 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		case model.CommandToggleWrap:
 			m.softWrap = !m.softWrap
 			return m, func() tea.Msg { return tui.ReconnectLogcatCmd{} }
+		case model.CommandToggleColor:
+			m.color = !m.color
+			m.Render()
+			return m, nil
 		case model.CommandReconnect:
 			m.visualMode = false
 			return m, func() tea.Msg { return tui.ReconnectLogcatCmd{} }
@@ -251,7 +245,7 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		m.pendingLogs = nil
 		return m, tea.Batch(
 			func() tea.Msg {
-				err := util.ConnectLogcat(m.device.Id, m.filter, m.format)
+				err := util.ConnectLogcat(m.device.Id, m.filter)
 				if err != nil {
 					return logcatErrorMsg{Err: err}
 				}
@@ -348,13 +342,9 @@ func (m *LogcatViewModel) Render() {
 				continue
 			}
 		}
-		if m.format.IsModifierActive("color") {
-			level := logLine.Level
-			if level == "" {
-				level = util.GetLogLevel(line, m.format)
-			}
+		if m.color {
 			style := lipgloss.NewStyle().
-				Foreground(theme.GetLogColor(level))
+				Foreground(theme.GetLogColor(logLine.Level))
 			if m.softWrap {
 				style = style.Width(m.viewport.Width)
 			}
@@ -441,7 +431,7 @@ func (m *LogcatViewModel) handleNormalModeKey(key string) updateResult {
 		}
 		m.commandDialog = commandui.NewDialog(commandui.DialogConfig{
 			Filter:         m.filter,
-			Format:         m.format,
+			Color:          m.color,
 			SoftWrap:       m.softWrap,
 			SelectedDevice: m.device,
 			DeviceId:       deviceId,
@@ -484,7 +474,7 @@ func (m *LogcatViewModel) handleShortcutKey(key string) updateResult {
 	// Navigation commands open the sub-dialog directly
 	cfg := commandui.DialogConfig{
 		Filter:         m.filter,
-		Format:         m.format,
+		Color:          m.color,
 		SoftWrap:       m.softWrap,
 		SelectedDevice: m.device,
 	}

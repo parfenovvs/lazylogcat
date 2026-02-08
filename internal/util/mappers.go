@@ -14,6 +14,9 @@ func FilterFromConfig(c *config.Config) model.Filter {
 	}
 }
 
-func FormatFromConfig(c *config.Config) model.Format {
-	return model.NewFormat(c.Display.Format, c.Display.Modifiers...)
+func ColorFromConfig(c *config.Config) bool {
+	if c.Display.Color == nil {
+		return true
+	}
+	return *c.Display.Color
 }

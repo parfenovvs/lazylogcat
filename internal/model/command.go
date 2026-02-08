@@ -9,10 +9,9 @@ const (
 	CommandLevel
 	CommandContent
 
-	// Output format
-	CommandFormat
-	CommandModifiers
+	// Output
 	CommandToggleWrap
+	CommandToggleColor
 
 	// Connection
 	CommandReconnect
@@ -56,9 +55,8 @@ func Commands() []CommandGroup {
 		{
 			Name: "Output",
 			Commands: []CommandData{
-				{Command: CommandFormat, Type: CommandTypeNavigation, Name: "Format", Shortcut: "ctrl+x f"},
-				{Command: CommandModifiers, Type: CommandTypeNavigation, Name: "Modifiers", Shortcut: "ctrl+x m"},
 				{Command: CommandToggleWrap, Type: CommandTypeAction, Name: "Toggle wrap", Shortcut: "ctrl+x w"},
+				{Command: CommandToggleColor, Type: CommandTypeAction, Name: "Toggle color"},
 			},
 		},
 		{

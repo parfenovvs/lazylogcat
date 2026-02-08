@@ -10,17 +10,32 @@ import (
 
 // Helper functions
 
+// boolPtr returns a pointer to a bool value, useful for Config.Display.Color.
+func boolPtr(v bool) *bool {
+	return &v
+}
+
+// compareBoolPtr compares two *bool values and reports an error if they differ.
+func compareBoolPtr(t *testing.T, field string, got, want *bool) {
+	t.Helper()
+	if got == nil && want == nil {
+		return
+	}
+	if got == nil || want == nil {
+		t.Errorf("%s = %v, want %v", field, got, want)
+		return
+	}
+	if *got != *want {
+		t.Errorf("%s = %v, want %v", field, *got, *want)
+	}
+}
+
 // compareConfigs compares two Config structs field by field and reports detailed errors.
 func compareConfigs(t *testing.T, got, want Config) {
 	t.Helper()
 
 	// Compare Display
-	if got.Display.Format != want.Display.Format {
-		t.Errorf("Display.Format = %q, want %q", got.Display.Format, want.Display.Format)
-	}
-	if !slicesEqual(got.Display.Modifiers, want.Display.Modifiers) {
-		t.Errorf("Display.Modifiers = %v, want %v", got.Display.Modifiers, want.Display.Modifiers)
-	}
+	compareBoolPtr(t, "Display.Color", got.Display.Color, want.Display.Color)
 
 	// Compare Filter
 	if got.Filter.Pkg != want.Filter.Pkg {
@@ -32,19 +47,6 @@ func compareConfigs(t *testing.T, got, want Config) {
 	if got.Filter.Txt != want.Filter.Txt {
 		t.Errorf("Filter.Txt = %+v, want %+v", got.Filter.Txt, want.Filter.Txt)
 	}
-}
-
-// slicesEqual compares two string slices for equality.
-func slicesEqual(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }
 
 // writeTestFile creates a JSON file with given content in a directory.
@@ -67,12 +69,11 @@ func TestDefaultConfig(t *testing.T) {
 	got := DefaultConfig()
 
 	t.Run("Display", func(t *testing.T) {
-		if got.Display.Format != "time" {
-			t.Errorf("Display.Format = %q, want %q", got.Display.Format, "time")
+		if got.Display.Color == nil {
+			t.Fatalf("Display.Color = nil, want non-nil")
 		}
-		wantModifiers := []string{"color"}
-		if !slicesEqual(got.Display.Modifiers, wantModifiers) {
-			t.Errorf("Display.Modifiers = %v, want %v", got.Display.Modifiers, wantModifiers)
+		if *got.Display.Color != true {
+			t.Errorf("Display.Color = %v, want true", *got.Display.Color)
 		}
 	})
 
@@ -186,8 +187,7 @@ func TestLoadFile(t *testing.T) {
 			name: "FullConfig",
 			jsonData: `{
   "display": {
-    "log_format": "json",
-    "log_modifiers": ["color", "epoch"]
+    "color": false
   },
   "filter": {
     "package_name": "com.example.app",
@@ -197,8 +197,7 @@ func TestLoadFile(t *testing.T) {
 }`,
 			wantConfig: Config{
 				Display: Display{
-					Format:    "json",
-					Modifiers: []string{"color", "epoch"},
+					Color: boolPtr(false),
 				},
 				Filter: Filter{
 					Pkg: TextFilter{Value: "com.example.app"},
@@ -240,9 +239,9 @@ func TestLoadFile(t *testing.T) {
 			},
 		},
 		{
-			name:       "DisplayOnly",
-			jsonData:   `{"display": {"log_format": "brief"}}`,
-			wantConfig: Config{Display: Display{Format: "brief"}},
+			name:       "DisplayColorTrue",
+			jsonData:   `{"display": {"color": true}}`,
+			wantConfig: Config{Display: Display{Color: boolPtr(true)}},
 		},
 		{
 			name:       "EmptyObject",
@@ -250,24 +249,14 @@ func TestLoadFile(t *testing.T) {
 			wantConfig: Config{},
 		},
 		{
-			name: "EmptyModifiersArray",
-			jsonData: `{
-  "display": {
-    "log_format": "time",
-    "log_modifiers": []
-  }
-}`,
-			wantConfig: Config{
-				Display: Display{
-					Format:    "time",
-					Modifiers: []string{},
-				},
-			},
+			name:       "DisplayColorFalse",
+			jsonData:   `{"display": {"color": false}}`,
+			wantConfig: Config{Display: Display{Color: boolPtr(false)}},
 		},
 		{
 			name:       "CompactJSON",
-			jsonData:   `{"display":{"log_format":"time","log_modifiers":["color"]},"filter":{"package_name":"com.example.app"}}`,
-			wantConfig: Config{Display: Display{Format: "time", Modifiers: []string{"color"}}, Filter: Filter{Pkg: TextFilter{Value: "com.example.app"}}},
+			jsonData:   `{"display":{"color":true},"filter":{"package_name":"com.example.app"}}`,
+			wantConfig: Config{Display: Display{Color: boolPtr(true)}, Filter: Filter{Pkg: TextFilter{Value: "com.example.app"}}},
 		},
 	}
 
@@ -297,7 +286,7 @@ func TestLoadFile_ErrorCases(t *testing.T) {
 		{name: "EmptyFile", jsonData: ""},
 		{name: "InvalidJSON", jsonData: `{this is not valid json}`},
 		{name: "IncompleteJSON", jsonData: `{"display": {`},
-		{name: "WrongTypes", jsonData: `{"display": {"log_format": 123}}`},
+		{name: "WrongTypes", jsonData: `{"display": {"color": "yes"}}`},
 	}
 
 	for _, tt := range tests {
@@ -325,7 +314,7 @@ func TestLoadFile_ErrorCases(t *testing.T) {
 	t.Run("ExtraFieldsAccepted", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "config.json")
-		data := `{"display": {"log_format": "time", "extra": "ignored"}, "unknown_section": {}}`
+		data := `{"display": {"color": true, "extra": "ignored"}, "unknown_section": {}}`
 		if err := os.WriteFile(path, []byte(data), 0644); err != nil {
 			t.Fatalf("Failed to write test file: %v", err)
 		}
@@ -369,8 +358,7 @@ func TestMerge(t *testing.T) {
 			base: DefaultConfig(),
 			overlay: Config{
 				Display: Display{
-					Format:    "json",
-					Modifiers: []string{"epoch", "uid"},
+					Color: boolPtr(false),
 				},
 				Filter: Filter{
 					Pkg: TextFilter{Value: "com.example"},
@@ -380,8 +368,7 @@ func TestMerge(t *testing.T) {
 			},
 			want: Config{
 				Display: Display{
-					Format:    "json",
-					Modifiers: []string{"epoch", "uid"},
+					Color: boolPtr(false),
 				},
 				Filter: Filter{
 					Pkg: TextFilter{Value: "com.example"},
@@ -391,15 +378,14 @@ func TestMerge(t *testing.T) {
 			},
 		},
 		{
-			name: "PartialOverlay_FormatOnly",
+			name: "PartialOverlay_ColorOnly",
 			base: DefaultConfig(),
 			overlay: Config{
-				Display: Display{Format: "brief"},
+				Display: Display{Color: boolPtr(false)},
 			},
 			want: Config{
 				Display: Display{
-					Format:    "brief",
-					Modifiers: []string{"color"},
+					Color: boolPtr(false),
 				},
 			},
 		},
@@ -413,8 +399,7 @@ func TestMerge(t *testing.T) {
 			},
 			want: Config{
 				Display: Display{
-					Format:    "time",
-					Modifiers: []string{"color"},
+					Color: boolPtr(true),
 				},
 				Filter: Filter{
 					Pkg: TextFilter{Value: "com.example"},
@@ -422,61 +407,38 @@ func TestMerge(t *testing.T) {
 			},
 		},
 		{
-			name: "EmptySliceClearsBase",
+			name: "NilColorPreservesBase",
 			base: Config{
 				Display: Display{
-					Format:    "time",
-					Modifiers: []string{"color"},
+					Color: boolPtr(true),
 				},
 			},
 			overlay: Config{
 				Display: Display{
-					Modifiers: []string{},
+					// Color is nil — should not override
 				},
 			},
 			want: Config{
 				Display: Display{
-					Format:    "time",
-					Modifiers: []string{},
+					Color: boolPtr(true),
 				},
 			},
 		},
 		{
-			name: "NilSlicePreservesBase",
+			name: "ColorOverridesBase",
 			base: Config{
 				Display: Display{
-					Format:    "time",
-					Modifiers: []string{"color"},
+					Color: boolPtr(true),
 				},
 			},
 			overlay: Config{
 				Display: Display{
-					Format: "brief",
-					// Modifiers is nil — should not override
+					Color: boolPtr(false),
 				},
 			},
 			want: Config{
 				Display: Display{
-					Format:    "brief",
-					Modifiers: []string{"color"},
-				},
-			},
-		},
-		{
-			name: "SliceReplacement",
-			base: Config{
-				Display: Display{
-					Modifiers: []string{"color"},
-				},
-			},
-			overlay: Config{
-				Display: Display{
-					Modifiers: []string{"epoch", "uid"},
-				},
-			},
-			want: Config{
-				Display: Display{
-					Modifiers: []string{"epoch", "uid"},
+					Color: boolPtr(false),
 				},
 			},
 		},
@@ -505,11 +467,11 @@ func TestMerge(t *testing.T) {
 			name: "EmptyBase",
 			base: Config{},
 			overlay: Config{
-				Display: Display{Format: "json"},
+				Display: Display{Color: boolPtr(false)},
 				Filter:  Filter{Pkg: TextFilter{Value: "com.example"}},
 			},
 			want: Config{
-				Display: Display{Format: "json"},
+				Display: Display{Color: boolPtr(false)},
 				Filter:  Filter{Pkg: TextFilter{Value: "com.example"}},
 			},
 		},
@@ -553,7 +515,7 @@ func TestResolve(t *testing.T) {
 		defer os.Chdir(origDir)
 
 		writeTestFile(t, filepath.Join(dir, ".lazylogcat"), "config.json", `{
-			"display": {"log_format": "brief"},
+			"display": {"color": false},
 			"filter": {"package_name": "com.project"}
 		}`)
 
@@ -564,8 +526,7 @@ func TestResolve(t *testing.T) {
 
 		want := Config{
 			Display: Display{
-				Format:    "brief",
-				Modifiers: []string{"color"}, // From defaults
+				Color: boolPtr(false),
 			},
 			Filter: Filter{
 				Pkg: TextFilter{Value: "com.project"},
@@ -582,7 +543,7 @@ func TestResolve(t *testing.T) {
 		defer os.Chdir(origDir)
 
 		writeTestFile(t, filepath.Join(dir, ".lazylogcat"), "config.json", `{
-			"display": {"log_format": "brief"},
+			"display": {"color": false},
 			"filter": {"package_name": "com.project", "log_tag": "ProjectTag"}
 		}`)
 
@@ -597,8 +558,7 @@ func TestResolve(t *testing.T) {
 
 		want := Config{
 			Display: Display{
-				Format:    "brief",           // From project
-				Modifiers: []string{"color"}, // From defaults
+				Color: boolPtr(false), // From project
 			},
 			Filter: Filter{
 				Pkg: TextFilter{Value: "com.local"},  // Overridden by local
@@ -631,8 +591,7 @@ func TestResolve(t *testing.T) {
 		// Local config should still be applied over defaults
 		want := Config{
 			Display: Display{
-				Format:    "time",
-				Modifiers: []string{"color"},
+				Color: boolPtr(true), // From defaults
 			},
 			Filter: Filter{
 				Pkg: TextFilter{Value: "com.local"},
@@ -653,7 +612,7 @@ func TestResolve(t *testing.T) {
 		// which are sufficient to verify merge precedence.
 
 		writeTestFile(t, filepath.Join(dir, ".lazylogcat"), "config.json", `{
-			"display": {"log_format": "brief", "log_modifiers": ["epoch"]},
+			"display": {"color": false},
 			"filter": {
 				"package_name": "com.project",
 				"log_tag": "ProjectTag",
@@ -662,7 +621,7 @@ func TestResolve(t *testing.T) {
 		}`)
 
 		writeTestFile(t, filepath.Join(dir, ".lazylogcat"), "config.local.json", `{
-			"display": {"log_format": "json"},
+			"display": {"color": true},
 			"filter": {"log_tag": "LocalTag"}
 		}`)
 
@@ -673,8 +632,7 @@ func TestResolve(t *testing.T) {
 
 		want := Config{
 			Display: Display{
-				Format:    "json",            // Overridden by local
-				Modifiers: []string{"epoch"}, // From project (local didn't set modifiers)
+				Color: boolPtr(true), // Overridden by local
 			},
 			Filter: Filter{
 				Pkg: TextFilter{Value: "com.project"},  // From project
@@ -701,8 +659,7 @@ func TestConfig_String(t *testing.T) {
 func TestConfig_JSONFieldNames(t *testing.T) {
 	config := Config{
 		Display: Display{
-			Format:    "test",
-			Modifiers: []string{"mod1"},
+			Color: boolPtr(true),
 		},
 		Filter: Filter{
 			Pkg: TextFilter{Value: "pkg"},
@@ -721,8 +678,7 @@ func TestConfig_JSONFieldNames(t *testing.T) {
 	expectedFields := []string{
 		`"display"`,
 		`"filter"`,
-		`"log_format"`,
-		`"log_modifiers"`,
+		`"color"`,
 		`"package_name"`,
 		`"log_tag"`,
 		`"log_text"`,
@@ -739,6 +695,8 @@ func TestConfig_JSONFieldNames(t *testing.T) {
 		`"preferences"`,
 		`"session"`,
 		`"device_id"`,
+		`"log_format"`,
+		`"log_modifiers"`,
 	}
 
 	for _, field := range oldFields {

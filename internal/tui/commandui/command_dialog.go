@@ -1,7 +1,6 @@
 package commandui
 
 import (
-	"fmt"
 	"maps"
 	"strings"
 
@@ -18,7 +17,7 @@ import (
 // DialogConfig holds the parameters for creating a new command dialog.
 type DialogConfig struct {
 	Filter         model.Filter
-	Format         model.Format
+	Color          bool
 	SoftWrap       bool
 	SelectedDevice *model.Device
 	DeviceId       string
@@ -35,9 +34,7 @@ type dialogState int
 const (
 	stateCommands dialogState = iota
 	stateLogLevel
-	stateFormat
 	stateDevices
-	stateModifiers
 	stateTextInput
 )
 
@@ -60,14 +57,11 @@ type CommandDialogModel struct {
 
 	// Active subdialog widgets (only one used at a time)
 	singleSelect SingleSelectModel
-	multiSelect  MultiSelectModel
 	textInputDlg TextInputModel
 
 	// Context for the active subdialog
-	activeCommand   model.Command
-	currentLevel    model.Level
-	currentFormat   string
-	activeModifiers map[string]bool
+	activeCommand model.Command
+	currentLevel  model.Level
 
 	// Device-specific state (devices has error/empty states beyond SingleSelect)
 	allDevices     []model.Device
@@ -95,20 +89,13 @@ func NewDialog(cfg DialogConfig) CommandDialogModel {
 			return lvl
 		case model.CommandContent:
 			return cfg.Filter.Text
-		case model.CommandFormat:
-			return cfg.Format.Value()
-		case model.CommandModifiers:
-			mods := cfg.Format.Modifiers()
-			switch len(mods) {
-			case 0:
-				return ""
-			case 1:
-				return mods[0]
-			default:
-				return fmt.Sprintf("[%d]", len(mods))
-			}
 		case model.CommandToggleWrap:
 			if cfg.SoftWrap {
+				return "on"
+			}
+			return "off"
+		case model.CommandToggleColor:
+			if cfg.Color {
 				return "on"
 			}
 			return "off"
@@ -163,20 +150,18 @@ func NewDialog(cfg DialogConfig) CommandDialogModel {
 	copy(allCommandRows, rows)
 
 	return CommandDialogModel{
-		state:           stateCommands,
-		table:           t,
-		skipRows:        skipRows,
-		commandMap:      commandMap,
-		allCommandRows:  allCommandRows,
-		allSkipRows:     allSkipRows,
-		allCommandMap:   allCommandMap,
-		currentLevel:    currentLevel,
-		currentFormat:   cfg.Format.Value(),
-		selectedDevice:  cfg.SelectedDevice,
-		activeModifiers: cfg.Format.ActiveModifiers,
-		searchInput:     newSearchInput(),
-		filter:          cfg.Filter,
-		deviceId:        cfg.DeviceId,
+		state:          stateCommands,
+		table:          t,
+		skipRows:       skipRows,
+		commandMap:     commandMap,
+		allCommandRows: allCommandRows,
+		allSkipRows:    allSkipRows,
+		allCommandMap:  allCommandMap,
+		currentLevel:   currentLevel,
+		selectedDevice: cfg.SelectedDevice,
+		searchInput:    newSearchInput(),
+		filter:         cfg.Filter,
+		deviceId:       cfg.DeviceId,
 	}
 }
 
@@ -211,12 +196,6 @@ func (m CommandDialogModel) openSubdialog(cmd model.Command) (CommandDialogModel
 	case model.CommandLevel:
 		m.singleSelect = newLevelSingleSelect(m.currentLevel)
 		m.state = stateLogLevel
-	case model.CommandFormat:
-		m.singleSelect = newFormatSingleSelect(m.currentFormat)
-		m.state = stateFormat
-	case model.CommandModifiers:
-		m.multiSelect = newModifiersMultiSelect(m.activeModifiers)
-		m.state = stateModifiers
 	case model.CommandDevices:
 		ss, allDevices, err := loadDevices(m.selectedDevice)
 		m.singleSelect = ss
@@ -245,12 +224,6 @@ func (m CommandDialogModel) Update(msg tea.Msg) (CommandDialogModel, tea.Cmd) {
 	case tea.KeyMsg:
 		key := msg.String()
 		if key == "ctrl+p" || key == "esc" {
-			if m.state == stateModifiers {
-				mods := m.multiSelect.ActiveItems()
-				return m, func() tea.Msg {
-					return CommandDialogModifiersSelectedMsg{Modifiers: mods}
-				}
-			}
 			return m, func() tea.Msg { return CommandDialogCloseMsg{} }
 		}
 
@@ -259,12 +232,8 @@ func (m CommandDialogModel) Update(msg tea.Msg) (CommandDialogModel, tea.Cmd) {
 			return m.updateCommands(msg, key)
 		case stateLogLevel:
 			return m.updateLogLevel(msg, key)
-		case stateFormat:
-			return m.updateFormat(msg, key)
 		case stateDevices:
 			return m.updateDevices(msg, key)
-		case stateModifiers:
-			return m.updateModifiers(msg, key)
 		case stateTextInput:
 			return m.updateTextInput(msg, key)
 		}
@@ -277,13 +246,9 @@ func (m CommandDialogModel) Update(msg tea.Msg) (CommandDialogModel, tea.Cmd) {
 		}
 		// Forward non-key messages to the appropriate widget for cursor blink.
 		switch m.state {
-		case stateLogLevel, stateFormat, stateDevices:
+		case stateLogLevel, stateDevices:
 			var cmd tea.Cmd
 			m.singleSelect, cmd = m.singleSelect.UpdateBlink(msg)
-			return m, cmd
-		case stateModifiers:
-			var cmd tea.Cmd
-			m.multiSelect, cmd = m.multiSelect.UpdateBlink(msg)
 			return m, cmd
 		default:
 			var cmd tea.Cmd
@@ -451,12 +416,8 @@ func (m CommandDialogModel) View() string {
 	switch m.state {
 	case stateLogLevel:
 		return m.singleSelect.View()
-	case stateFormat:
-		return m.singleSelect.View()
 	case stateDevices:
 		return m.viewDevices()
-	case stateModifiers:
-		return m.multiSelect.View()
 	case stateTextInput:
 		return m.textInputDlg.View()
 	default:
