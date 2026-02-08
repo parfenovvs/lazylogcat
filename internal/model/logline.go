@@ -1,6 +1,9 @@
 package model
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // LogLine represents a parsed logcat log line in the threadtime format.
 //
@@ -51,8 +54,8 @@ func ParseLogLine(raw string) LogLine {
 	var tag string
 	var colonTokens int // how many tokens the tag+colon span (1 or 2)
 	tagField := parts[5]
-	if strings.HasSuffix(tagField, ":") {
-		tag = strings.TrimSuffix(tagField, ":")
+	if before, ok := strings.CutSuffix(tagField, ":"); ok {
+		tag = before
 		colonTokens = 6
 	} else if len(parts) > 6 && parts[6] == ":" {
 		tag = tagField
@@ -87,7 +90,7 @@ func ParseLogLine(raw string) LogLine {
 // findTokenEnd returns the index in raw right after the n-th whitespace-delimited token.
 func findTokenEnd(raw string, parts []string, n int) int {
 	pos := 0
-	for i := 0; i < n; i++ {
+	for i := range n {
 		// Skip whitespace
 		for pos < len(raw) && raw[pos] == ' ' {
 			pos++
@@ -102,6 +105,48 @@ func findTokenEnd(raw string, parts []string, n int) int {
 // to what adb logcat produced, preserving all original spacing and formatting.
 func (l LogLine) String() string {
 	return l.Raw
+}
+
+// Columns controls which fields of a parsed LogLine are included in ModifiedString output.
+type Columns struct {
+	Date    bool
+	Time    bool
+	PID     bool
+	TID     bool
+	Level   bool
+	Tag     bool
+	Message bool
+}
+
+// ModifiedString returns the log line with only the columns specified by cols.
+// If the line was not successfully parsed, the original raw line is returned.
+func (l LogLine) ModifiedString(cols Columns) string {
+	if !l.Parsed() {
+		return l.Raw
+	}
+	var parts []string
+	if cols.Date {
+		parts = append(parts, l.Date)
+	}
+	if cols.Time {
+		parts = append(parts, l.Time)
+	}
+	if cols.PID {
+		parts = append(parts, fmt.Sprintf("%5s", l.PID))
+	}
+	if cols.TID {
+		parts = append(parts, fmt.Sprintf("%5s", l.TID))
+	}
+	if cols.Level {
+		parts = append(parts, l.Level)
+	}
+	if cols.Tag {
+		parts = append(parts, l.Tag+":")
+	}
+	if cols.Message {
+		parts = append(parts, l.Message)
+	}
+	return strings.Join(parts, " ")
 }
 
 // Parsed returns true if the line was successfully parsed into structured fields.

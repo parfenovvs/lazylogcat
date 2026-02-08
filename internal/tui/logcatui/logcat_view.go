@@ -68,6 +68,7 @@ type LogcatViewModel struct {
 	currentLine       int
 	startSelected     int
 	softWrap          bool
+	columns           model.Columns
 	err               error
 	awaitingShortcut  bool
 	toast             tui.ToastModel
@@ -113,42 +114,9 @@ func readNext(m LogcatViewModel) tea.Msg {
 		return nil
 	}
 
-	// Filter empty lines (threadtime format never produces meaningful empty lines)
-	if strings.Trim(raw, "\n\r ") == "" {
-		return logcatEmptyMsg{}
-	}
-
-	// Filter by text search (case-insensitive) on the raw line before parsing
-	if m.filter.Text != "" && !strings.Contains(strings.ToLower(raw), strings.ToLower(m.filter.Text)) {
-		return logcatEmptyMsg{}
-	}
-
 	line := model.ParseLogLine(raw)
 
-	// Structured filters only apply to successfully parsed lines.
-	// Unparsed lines (e.g. "--------- beginning of main") are skipped
-	// when any structured filter is active.
-	if line.Parsed() {
-		// Filter by PID (package name resolved to PIDs)
-		if len(m.pidSet) > 0 {
-			if _, ok := m.pidSet[line.PID]; !ok {
-				return logcatEmptyMsg{}
-			}
-		}
-
-		// Filter by minimum log level
-		if m.filter.Level != "" && m.filter.Level != model.LvlV {
-			if model.LevelIndex(line.Level) < model.LevelIndex(string(m.filter.Level)) {
-				return logcatEmptyMsg{}
-			}
-		}
-
-		// Filter by tag (case-insensitive contains)
-		if m.filter.Tag != "" && !strings.Contains(strings.ToLower(line.Tag), strings.ToLower(m.filter.Tag)) {
-			return logcatEmptyMsg{}
-		}
-	} else if len(m.pidSet) > 0 || m.filter.Tag != "" || (m.filter.Level != "" && m.filter.Level != model.LvlV) {
-		// Skip unparsed lines when any structured filter is active
+	if !matchesFilter(raw, line, m.filter, m.pidSet) {
 		return logcatEmptyMsg{}
 	}
 
@@ -191,6 +159,15 @@ func New(parentSize model.Size, device *model.Device, deviceId string, filter mo
 		startSelected:  -1,
 		filter:         filter,
 		color:          color,
+		columns: model.Columns{
+			Date:    true,
+			Time:    true,
+			PID:     true,
+			TID:     true,
+			Level:   true,
+			Tag:     true,
+			Message: true,
+		},
 	}
 
 	headerHeight := lipgloss.Height(m.headerView())
@@ -396,7 +373,7 @@ func (m *LogcatViewModel) Render() {
 	var b strings.Builder
 	logs := m.log.All()
 	for i, logLine := range logs {
-		line := logLine.String()
+		line := logLine.ModifiedString(m.columns)
 		if m.visualMode {
 			selected := false
 			if m.startSelected >= 0 {
@@ -590,14 +567,14 @@ func (m *LogcatViewModel) handleVisualModeKey(key string) updateResult {
 				var lines []string
 				logs := m.log.Recent(m.log.Size() - start)
 				for i := 0; i <= end-start; i++ {
-					lines = append(lines, strings.TrimSpace(logs[i].String()))
+					lines = append(lines, strings.TrimSpace(logs[i].ModifiedString(m.columns)))
 				}
 				err = util.CopyToClipboard(lines...)
 				m.startSelected = -1
 				return updateResult{needsRender: true}
 			} else {
 				logs := m.log.Recent(m.log.Size() - m.currentLine)
-				lineText := strings.TrimSpace(logs[0].String())
+				lineText := strings.TrimSpace(logs[0].ModifiedString(m.columns))
 				err = util.CopyToClipboard(lineText)
 			}
 			if err != nil {
@@ -635,7 +612,7 @@ func (m *LogcatViewModel) ensureLineVisible() {
 	logs := m.log.All()
 	linesUpToCurrent := 0
 	for i := 0; i <= m.currentLine; i++ {
-		line := logs[i].String()
+		line := logs[i].ModifiedString(m.columns)
 		if m.softWrap || (m.startSelected != -1 && i >= min && i <= max) {
 			linesUpToCurrent += lipgloss.Height(lipgloss.NewStyle().Width(m.viewport.Width).Render(line))
 		} else {
