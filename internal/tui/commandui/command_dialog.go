@@ -35,6 +35,7 @@ const (
 	stateLogLevel
 	stateDevices
 	stateTextInput
+	stateMultiSelect
 )
 
 var dialogStyle = func() lipgloss.Style {
@@ -56,6 +57,7 @@ type CommandDialogModel struct {
 
 	// Active subdialog widgets (only one used at a time)
 	singleSelect SingleSelectModel
+	multiSelect  MultiSelectModel
 	textInputDlg TextInputModel
 
 	// Context for the active subdialog
@@ -69,8 +71,9 @@ type CommandDialogModel struct {
 
 	searchInput textinput.Model
 
-	filter   model.Filter
-	deviceId string
+	filter      model.Filter
+	outputPrefs model.OutputPrefs
+	deviceId    string
 }
 
 func NewDialog(cfg DialogConfig) CommandDialogModel {
@@ -88,16 +91,6 @@ func NewDialog(cfg DialogConfig) CommandDialogModel {
 			return lvl
 		case model.CommandContent:
 			return cfg.Filter.Text
-		case model.CommandToggleWrap:
-			if cfg.OutputPrefs.SoftWrap {
-				return "on"
-			}
-			return "off"
-		case model.CommandToggleColor:
-			if cfg.OutputPrefs.Color {
-				return "on"
-			}
-			return "off"
 		case model.CommandDevices:
 			if cfg.SelectedDevice != nil {
 				return cfg.SelectedDevice.Name
@@ -160,6 +153,7 @@ func NewDialog(cfg DialogConfig) CommandDialogModel {
 		selectedDevice: cfg.SelectedDevice,
 		searchInput:    newSearchInput(),
 		filter:         cfg.Filter,
+		outputPrefs:    cfg.OutputPrefs,
 		deviceId:       cfg.DeviceId,
 	}
 }
@@ -195,6 +189,9 @@ func (m CommandDialogModel) openSubdialog(cmd model.Command) (CommandDialogModel
 	case model.CommandLevel:
 		m.singleSelect = newLevelSingleSelect(m.currentLevel)
 		m.state = stateLogLevel
+	case model.CommandOutput:
+		m.multiSelect = newOutputMultiSelect(m.outputPrefs)
+		m.state = stateMultiSelect
 	case model.CommandDevices:
 		ss, allDevices, err := loadDevices(m.selectedDevice)
 		m.singleSelect = ss
@@ -223,6 +220,10 @@ func (m CommandDialogModel) Update(msg tea.Msg) (CommandDialogModel, tea.Cmd) {
 	case tea.KeyMsg:
 		key := msg.String()
 		if key == "ctrl+p" || key == "esc" {
+			if m.state == stateMultiSelect {
+				prefs := outputPrefsFromActive(m.multiSelect.ActiveItems())
+				return m, func() tea.Msg { return OutputPrefsChangedMsg{OutputPrefs: prefs} }
+			}
 			return m, func() tea.Msg { return CommandDialogCloseMsg{} }
 		}
 
@@ -235,6 +236,8 @@ func (m CommandDialogModel) Update(msg tea.Msg) (CommandDialogModel, tea.Cmd) {
 			return m.updateDevices(msg, key)
 		case stateTextInput:
 			return m.updateTextInput(msg, key)
+		case stateMultiSelect:
+			return m.updateMultiSelect(msg, key)
 		}
 	default:
 		// Forward non-key messages (e.g. cursor blink) to the active widget.
@@ -248,6 +251,10 @@ func (m CommandDialogModel) Update(msg tea.Msg) (CommandDialogModel, tea.Cmd) {
 		case stateLogLevel, stateDevices:
 			var cmd tea.Cmd
 			m.singleSelect, cmd = m.singleSelect.UpdateBlink(msg)
+			return m, cmd
+		case stateMultiSelect:
+			var cmd tea.Cmd
+			m.multiSelect, cmd = m.multiSelect.UpdateBlink(msg)
 			return m, cmd
 		default:
 			var cmd tea.Cmd
@@ -419,6 +426,8 @@ func (m CommandDialogModel) View() string {
 		return m.viewDevices()
 	case stateTextInput:
 		return m.textInputDlg.View()
+	case stateMultiSelect:
+		return m.multiSelect.View()
 	default:
 		return m.viewCommands()
 	}

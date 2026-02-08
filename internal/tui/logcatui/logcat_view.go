@@ -226,19 +226,22 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 	case commandui.CommandDialogSelectMsg:
 		m.showCommandDialog = false
 		switch msg.Command {
-		case model.CommandToggleWrap:
-			m.outputPrefs.SoftWrap = !m.outputPrefs.SoftWrap
-			return m, func() tea.Msg { return tui.ReconnectLogcatCmd{} }
-		case model.CommandToggleColor:
-			m.outputPrefs.Color = !m.outputPrefs.Color
-			m.Render()
-			return m, nil
 		case model.CommandReconnect:
 			m.visualMode = false
 			return m, func() tea.Msg { return tui.ReconnectLogcatCmd{} }
 		case model.CommandExit:
 			return m, func() tea.Msg { return tui.ExitCmd{} }
 		}
+		return m, nil
+
+	case commandui.OutputPrefsChangedMsg:
+		m.showCommandDialog = false
+		oldWrap := m.outputPrefs.SoftWrap
+		m.outputPrefs = msg.OutputPrefs
+		if m.outputPrefs.SoftWrap != oldWrap {
+			return m, func() tea.Msg { return tui.ReconnectLogcatCmd{} }
+		}
+		m.Render()
 		return m, nil
 
 	case tui.ToastExpiredMsg:
@@ -498,9 +501,6 @@ func (m *LogcatViewModel) handleShortcutKey(key string) updateResult {
 	// Action commands execute immediately without opening a dialog
 	if cmdData.Type == model.CommandTypeAction {
 		switch cmdData.Command {
-		case model.CommandToggleWrap:
-			m.outputPrefs.SoftWrap = !m.outputPrefs.SoftWrap
-			return updateResult{cmd: func() tea.Msg { return tui.ReconnectLogcatCmd{} }}
 		case model.CommandReconnect:
 			m.visualMode = false
 			return updateResult{cmd: func() tea.Msg { return tui.ReconnectLogcatCmd{} }}
