@@ -62,6 +62,21 @@ func GetConnectedDevices() ([]model.Device, error) {
 }
 
 func ConnectLogcat(deviceId string, filter model.Filter) error {
+	devices, err := GetConnectedDevices()
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrFailedToStartLogcat, err)
+	}
+	deviceFound := false
+	for _, d := range devices {
+		if d.Id == deviceId {
+			deviceFound = true
+			break
+		}
+	}
+	if !deviceFound {
+		return fmt.Errorf("%w: device %s is not connected", ErrFailedToStartLogcat, deviceId)
+	}
+
 	args := []string{"-s", deviceId, "logcat", "-T", strconv.Itoa(initialLogLinesCount), "-v", "threadtime"}
 
 	slog.Debug("Executing adb logcat command", "args", args)

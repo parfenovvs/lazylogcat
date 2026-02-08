@@ -16,10 +16,7 @@ var rootCmd = &cobra.Command{
 	Long:         `lazylogcat is an interactive TUI application for viewing Android device logs.`,
 	SilenceUsage: true,
 	PreRunE: func(cmd *cobra.Command, args []string) error {
-		if debugFlag {
-			return app.SetupLogging()
-		}
-		return nil
+		return app.SetupLogging(debugFlag)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := app.PreLaunchChecks(); err != nil {
@@ -34,10 +31,7 @@ var rootCmd = &cobra.Command{
 		return app.LaunchTUI(c)
 	},
 	PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
-		if debugFlag {
-			return app.CloseLog()
-		}
-		return nil
+		return app.CloseLog()
 	},
 }
 

@@ -73,6 +73,7 @@ type LogcatViewModel struct {
 	showCommandDialog bool
 	commandDialog     commandui.CommandDialogModel
 	deviceRequired    bool
+	voluntaryClose    bool
 }
 
 type logcatMsg struct {
@@ -87,9 +88,13 @@ type logcatErrorMsg struct {
 
 type logcatConnectedMsg struct{}
 
+type logcatDisconnectedMsg struct{}
+
 type batchTickMsg struct{}
 
 type pidRefreshTickMsg struct{}
+
+type reconnectTickMsg struct{}
 
 type pidRefreshMsg struct {
 	pidSet map[string]struct{}
@@ -106,10 +111,10 @@ func readNext(m LogcatViewModel) tea.Msg {
 	raw, err := util.ReadNextLogLine()
 	if err != nil {
 		if errors.Is(err, io.EOF) {
-			return nil // End of stream
+			return logcatDisconnectedMsg{}
 		}
 		slog.Warn("Error reading logcat line", "error", err)
-		return nil
+		return logcatDisconnectedMsg{}
 	}
 
 	line := model.ParseLogLine(raw)
@@ -128,6 +133,13 @@ func tickForBatch() tea.Cmd {
 }
 
 const pidRefreshInterval = 1 * time.Second
+const reconnectInterval = 2 * time.Second
+
+func reconnectTick() tea.Cmd {
+	return tea.Tick(reconnectInterval, func(t time.Time) tea.Msg {
+		return reconnectTickMsg{}
+	})
+}
 
 func pidRefreshTick() tea.Cmd {
 	return tea.Tick(pidRefreshInterval, func(t time.Time) tea.Msg {
@@ -213,6 +225,9 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		switch msg.Command {
 		case model.CommandPackage:
 			m.filter.PackageName = msg.Value
+			if msg.Value == "" {
+				m.pidSet = nil
+			}
 			return m, func() tea.Msg { return tui.ReconnectLogcatCmd{} }
 		case model.CommandTag:
 			m.filter.Tag = msg.Value
@@ -265,6 +280,7 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		if m.device == nil {
 			return m, nil // No device selected, nothing to connect
 		}
+		m.voluntaryClose = true
 		util.CloseLogcat()
 		m.log = util.NewRingBuffer(maxLogLines)
 		m.pendingLogs = nil
@@ -282,9 +298,13 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		)
 
 	case logcatConnectedMsg:
+		m.voluntaryClose = false
+		m.log = util.NewRingBuffer(maxLogLines)
+		m.pendingLogs = nil
 		cmds := []tea.Cmd{
 			func() tea.Msg { return readNext(m) },
 			tickForBatch(),
+			func() tea.Msg { return tui.MeasureCmd{} },
 		}
 		if m.filter.PackageName != "" {
 			// Start PID refresh cycle and do an immediate resolution
@@ -300,6 +320,28 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 			)
 		}
 		return m, nil
+
+	case logcatDisconnectedMsg:
+		if m.voluntaryClose {
+			m.voluntaryClose = false
+			return m, nil
+		}
+		util.CloseLogcat()
+		toastCmd := m.toast.Show("Reconnecting...")
+		return m, tea.Batch(toastCmd, reconnectTick())
+
+	case reconnectTickMsg:
+		if m.device == nil {
+			return m, nil
+		}
+		return m, func() tea.Msg {
+			err := util.ConnectLogcat(m.device.Id, m.filter)
+			if err != nil {
+				slog.Warn("Reconnect attempt failed", "error", err)
+				return logcatDisconnectedMsg{}
+			}
+			return logcatConnectedMsg{}
+		}
 
 	case pidRefreshMsg:
 		m.pidSet = msg.pidSet

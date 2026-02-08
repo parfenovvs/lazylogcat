@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -25,7 +26,15 @@ func PreLaunchChecks() error {
 	return nil
 }
 
-func SetupLogging() error {
+func SetupLogging(debug bool) error {
+	if !debug {
+		logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{
+			Level: slog.LevelError + 1,
+		}))
+		slog.SetDefault(logger)
+		return nil
+	}
+
 	f, err := tea.LogToFile(".lazylogcat.log", "debug")
 	if err != nil {
 		return fmt.Errorf("could not open log file: %w", err)
