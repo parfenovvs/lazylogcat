@@ -7,10 +7,9 @@ type MeasureCmd struct{}
 type NavigateToLogcatCmd struct{}
 
 type DeviceSelectedMsg struct {
-	Device   model.Device
-	Filter   model.Filter
-	Color    bool
-	SoftWrap bool
+	Device      model.Device
+	Filter      model.Filter
+	OutputPrefs model.OutputPrefs
 }
 
 type ShowDeviceDialogCmd struct{}

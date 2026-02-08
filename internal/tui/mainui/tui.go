@@ -29,8 +29,7 @@ type MainModel struct {
 	currentDevice  *model.Device
 	deviceRequired bool
 	filter         model.Filter
-	color          bool
-	softWrap       bool
+	outputPrefs    model.OutputPrefs
 
 	logcatView logcatui.LogcatViewModel
 }
@@ -58,12 +57,23 @@ func InitMainModel(c config.Config) MainModel {
 	}
 
 	m.filter = util.FilterFromConfig(&c)
-	m.color = util.ColorFromConfig(&c)
-	m.softWrap = true
+	m.outputPrefs = model.OutputPrefs{
+		Color:    util.ColorFromConfig(&c),
+		SoftWrap: true,
+		Columns: model.Columns{
+			Date:    true,
+			Time:    true,
+			PID:     true,
+			TID:     true,
+			Level:   true,
+			Tag:     true,
+			Message: true,
+		},
+	}
 
 	// Always start in logcat view
 	m.state = logcatView
-	m.logcatView = logcatui.New(m.windowSize, m.currentDevice, m.deviceId(), m.filter, m.color, m.softWrap)
+	m.logcatView = logcatui.New(m.windowSize, m.currentDevice, m.deviceId(), m.filter, m.outputPrefs)
 
 	return m
 }
@@ -110,8 +120,7 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.currentDevice = &msg.Device
 		m.deviceRequired = false
 		m.filter = msg.Filter
-		m.color = msg.Color
-		m.softWrap = msg.SoftWrap
+		m.outputPrefs = msg.OutputPrefs
 		return m, func() tea.Msg {
 			return tui.NavigateToLogcatCmd{}
 		}
@@ -119,7 +128,7 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tui.NavigateToLogcatCmd:
 		m.state = logcatView
 		logcatui.Close(&m.logcatView)
-		m.logcatView = logcatui.New(m.windowSize, m.currentDevice, m.deviceId(), m.filter, m.color, m.softWrap)
+		m.logcatView = logcatui.New(m.windowSize, m.currentDevice, m.deviceId(), m.filter, m.outputPrefs)
 		return m, func() tea.Msg {
 			return tui.ReconnectLogcatCmd{}
 		}

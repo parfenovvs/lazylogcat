@@ -107,17 +107,6 @@ func (l LogLine) String() string {
 	return l.Raw
 }
 
-// Columns controls which fields of a parsed LogLine are included in ModifiedString output.
-type Columns struct {
-	Date    bool
-	Time    bool
-	PID     bool
-	TID     bool
-	Level   bool
-	Tag     bool
-	Message bool
-}
-
 // ModifiedString returns the log line with only the columns specified by cols.
 // If the line was not successfully parsed, the original raw line is returned.
 func (l LogLine) ModifiedString(cols Columns) string {

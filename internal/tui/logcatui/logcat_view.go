@@ -60,15 +60,13 @@ type LogcatViewModel struct {
 	device            *model.Device
 	deviceId          string
 	filter            model.Filter
-	color             bool
+	outputPrefs       model.OutputPrefs
 	log               *util.RingBuffer
 	pendingLogs       []model.LogLine
 	pidSet            map[string]struct{}
 	visualMode        bool
 	currentLine       int
 	startSelected     int
-	softWrap          bool
-	columns           model.Columns
 	err               error
 	awaitingShortcut  bool
 	toast             tui.ToastModel
@@ -148,26 +146,16 @@ func refreshPIDs(deviceId string, filter string) tea.Cmd {
 	}
 }
 
-func New(parentSize model.Size, device *model.Device, deviceId string, filter model.Filter, color bool, softWrap bool) LogcatViewModel {
+func New(parentSize model.Size, device *model.Device, deviceId string, filter model.Filter, outputPrefs model.OutputPrefs) LogcatViewModel {
 	m := LogcatViewModel{
 		parentSize:     parentSize,
 		device:         device,
 		deviceId:       deviceId,
 		deviceRequired: device == nil,
 		log:            util.NewRingBuffer(maxLogLines),
-		softWrap:       softWrap,
 		startSelected:  -1,
 		filter:         filter,
-		color:          color,
-		columns: model.Columns{
-			Date:    true,
-			Time:    true,
-			PID:     true,
-			TID:     true,
-			Level:   true,
-			Tag:     true,
-			Message: true,
-		},
+		outputPrefs:    outputPrefs,
 	}
 
 	headerHeight := lipgloss.Height(m.headerView())
@@ -217,7 +205,7 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		m.showCommandDialog = false
 		m.deviceRequired = false
 		return m, func() tea.Msg {
-			return tui.DeviceSelectedMsg{Device: msg.Device, Filter: m.filter, Color: m.color, SoftWrap: m.softWrap}
+			return tui.DeviceSelectedMsg{Device: msg.Device, Filter: m.filter, OutputPrefs: m.outputPrefs}
 		}
 
 	case commandui.CommandDialogTextInputAppliedMsg:
@@ -239,10 +227,10 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		m.showCommandDialog = false
 		switch msg.Command {
 		case model.CommandToggleWrap:
-			m.softWrap = !m.softWrap
+			m.outputPrefs.SoftWrap = !m.outputPrefs.SoftWrap
 			return m, func() tea.Msg { return tui.ReconnectLogcatCmd{} }
 		case model.CommandToggleColor:
-			m.color = !m.color
+			m.outputPrefs.Color = !m.outputPrefs.Color
 			m.Render()
 			return m, nil
 		case model.CommandReconnect:
@@ -373,7 +361,7 @@ func (m *LogcatViewModel) Render() {
 	var b strings.Builder
 	logs := m.log.All()
 	for i, logLine := range logs {
-		line := logLine.ModifiedString(m.columns)
+		line := logLine.ModifiedString(m.outputPrefs.Columns)
 		if m.visualMode {
 			selected := false
 			if m.startSelected >= 0 {
@@ -394,10 +382,10 @@ func (m *LogcatViewModel) Render() {
 				continue
 			}
 		}
-		if m.color {
+		if m.outputPrefs.Color {
 			style := lipgloss.NewStyle().
 				Foreground(theme.GetLogColor(logLine.Level))
-			if m.softWrap {
+			if m.outputPrefs.SoftWrap {
 				style = style.Width(m.viewport.Width)
 			}
 			styled := style.Render(line)
@@ -409,7 +397,7 @@ func (m *LogcatViewModel) Render() {
 		}
 	}
 	wrapped := b.String()
-	if m.softWrap {
+	if m.outputPrefs.SoftWrap {
 		wrapped = lipgloss.NewStyle().Width(m.viewport.Width).Render(wrapped)
 	}
 	m.viewport.SetContent(wrapped)
@@ -483,8 +471,7 @@ func (m *LogcatViewModel) handleNormalModeKey(key string) updateResult {
 		}
 		m.commandDialog = commandui.NewDialog(commandui.DialogConfig{
 			Filter:         m.filter,
-			Color:          m.color,
-			SoftWrap:       m.softWrap,
+			OutputPrefs:    m.outputPrefs,
 			SelectedDevice: m.device,
 			DeviceId:       deviceId,
 		})
@@ -512,7 +499,7 @@ func (m *LogcatViewModel) handleShortcutKey(key string) updateResult {
 	if cmdData.Type == model.CommandTypeAction {
 		switch cmdData.Command {
 		case model.CommandToggleWrap:
-			m.softWrap = !m.softWrap
+			m.outputPrefs.SoftWrap = !m.outputPrefs.SoftWrap
 			return updateResult{cmd: func() tea.Msg { return tui.ReconnectLogcatCmd{} }}
 		case model.CommandReconnect:
 			m.visualMode = false
@@ -526,8 +513,7 @@ func (m *LogcatViewModel) handleShortcutKey(key string) updateResult {
 	// Navigation commands open the sub-dialog directly
 	cfg := commandui.DialogConfig{
 		Filter:         m.filter,
-		Color:          m.color,
-		SoftWrap:       m.softWrap,
+		OutputPrefs:    m.outputPrefs,
 		SelectedDevice: m.device,
 	}
 	if m.device != nil {
@@ -567,14 +553,14 @@ func (m *LogcatViewModel) handleVisualModeKey(key string) updateResult {
 				var lines []string
 				logs := m.log.Recent(m.log.Size() - start)
 				for i := 0; i <= end-start; i++ {
-					lines = append(lines, strings.TrimSpace(logs[i].ModifiedString(m.columns)))
+					lines = append(lines, strings.TrimSpace(logs[i].ModifiedString(m.outputPrefs.Columns)))
 				}
 				err = util.CopyToClipboard(lines...)
 				m.startSelected = -1
 				return updateResult{needsRender: true}
 			} else {
 				logs := m.log.Recent(m.log.Size() - m.currentLine)
-				lineText := strings.TrimSpace(logs[0].ModifiedString(m.columns))
+				lineText := strings.TrimSpace(logs[0].ModifiedString(m.outputPrefs.Columns))
 				err = util.CopyToClipboard(lineText)
 			}
 			if err != nil {
@@ -612,8 +598,8 @@ func (m *LogcatViewModel) ensureLineVisible() {
 	logs := m.log.All()
 	linesUpToCurrent := 0
 	for i := 0; i <= m.currentLine; i++ {
-		line := logs[i].ModifiedString(m.columns)
-		if m.softWrap || (m.startSelected != -1 && i >= min && i <= max) {
+		line := logs[i].ModifiedString(m.outputPrefs.Columns)
+		if m.outputPrefs.SoftWrap || (m.startSelected != -1 && i >= min && i <= max) {
 			linesUpToCurrent += lipgloss.Height(lipgloss.NewStyle().Width(m.viewport.Width).Render(line))
 		} else {
 			linesUpToCurrent++

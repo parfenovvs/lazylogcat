@@ -17,8 +17,7 @@ import (
 // DialogConfig holds the parameters for creating a new command dialog.
 type DialogConfig struct {
 	Filter         model.Filter
-	Color          bool
-	SoftWrap       bool
+	OutputPrefs    model.OutputPrefs
 	SelectedDevice *model.Device
 	DeviceId       string
 }
@@ -90,12 +89,12 @@ func NewDialog(cfg DialogConfig) CommandDialogModel {
 		case model.CommandContent:
 			return cfg.Filter.Text
 		case model.CommandToggleWrap:
-			if cfg.SoftWrap {
+			if cfg.OutputPrefs.SoftWrap {
 				return "on"
 			}
 			return "off"
 		case model.CommandToggleColor:
-			if cfg.Color {
+			if cfg.OutputPrefs.Color {
 				return "on"
 			}
 			return "off"
