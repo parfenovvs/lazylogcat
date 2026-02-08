@@ -40,3 +40,12 @@ func (l Level) Next() Level {
 	}
 	return Level(lvls[i+1])
 }
+
+// LevelIndex returns the numeric severity index of a log level string.
+// V=0, D=1, I=2, W=3, E=4, F=5. Returns -1 if the level is unknown or empty.
+func LevelIndex(l string) int {
+	if len(l) != 1 {
+		return -1
+	}
+	return strings.Index(lvls, l)
+}

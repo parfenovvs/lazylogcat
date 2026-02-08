@@ -1,13 +1,10 @@
 package commandui
 
 import (
-	"fmt"
-
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/parfenovvs/lazylogcat/internal/model"
-	"github.com/parfenovvs/lazylogcat/internal/util"
 )
 
 // CommandDialogTextInputAppliedMsg is sent when the user confirms the text input value with enter.
@@ -43,22 +40,10 @@ func textInputPlaceholder(cmd model.Command) string {
 }
 
 func newCommandTextInput(cmd model.Command, currentValue string, deviceId string) TextInputModel {
-	var validateFn func(string) error
-	if cmd == model.CommandPackage {
-		validateFn = func(value string) error {
-			_, err := util.GetPidByPackageName(deviceId, value)
-			if err != nil {
-				return fmt.Errorf("Package not found on device")
-			}
-			return nil
-		}
-	}
-
 	return NewTextInput(TextInputConfig{
 		Title:       textInputTitle(cmd),
 		Placeholder: textInputPlaceholder(cmd),
 		Value:       currentValue,
-		ValidateFn:  validateFn,
 	})
 }
 

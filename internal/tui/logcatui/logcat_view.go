@@ -58,10 +58,12 @@ type LogcatViewModel struct {
 	parentSize        model.Size
 	viewport          viewport.Model
 	device            *model.Device
+	deviceId          string
 	filter            model.Filter
 	color             bool
 	log               *util.RingBuffer
 	pendingLogs       []model.LogLine
+	pidSet            map[string]struct{}
 	visualMode        bool
 	currentLine       int
 	startSelected     int
@@ -88,6 +90,12 @@ type logcatConnectedMsg struct{}
 
 type batchTickMsg struct{}
 
+type pidRefreshTickMsg struct{}
+
+type pidRefreshMsg struct {
+	pidSet map[string]struct{}
+}
+
 // updateResult is returned by key handlers to indicate what action to take
 type updateResult struct {
 	cmd         tea.Cmd
@@ -110,12 +118,41 @@ func readNext(m LogcatViewModel) tea.Msg {
 		return logcatEmptyMsg{}
 	}
 
-	// Filter by text search (case-insensitive)
+	// Filter by text search (case-insensitive) on the raw line before parsing
 	if m.filter.Text != "" && !strings.Contains(strings.ToLower(raw), strings.ToLower(m.filter.Text)) {
 		return logcatEmptyMsg{}
 	}
 
-	return logcatMsg{Line: model.ParseLogLine(raw)}
+	line := model.ParseLogLine(raw)
+
+	// Structured filters only apply to successfully parsed lines.
+	// Unparsed lines (e.g. "--------- beginning of main") are skipped
+	// when any structured filter is active.
+	if line.Parsed() {
+		// Filter by PID (package name resolved to PIDs)
+		if len(m.pidSet) > 0 {
+			if _, ok := m.pidSet[line.PID]; !ok {
+				return logcatEmptyMsg{}
+			}
+		}
+
+		// Filter by minimum log level
+		if m.filter.Level != "" && m.filter.Level != model.LvlV {
+			if model.LevelIndex(line.Level) < model.LevelIndex(string(m.filter.Level)) {
+				return logcatEmptyMsg{}
+			}
+		}
+
+		// Filter by tag (case-insensitive contains)
+		if m.filter.Tag != "" && !strings.Contains(strings.ToLower(line.Tag), strings.ToLower(m.filter.Tag)) {
+			return logcatEmptyMsg{}
+		}
+	} else if len(m.pidSet) > 0 || m.filter.Tag != "" || (m.filter.Level != "" && m.filter.Level != model.LvlV) {
+		// Skip unparsed lines when any structured filter is active
+		return logcatEmptyMsg{}
+	}
+
+	return logcatMsg{Line: line}
 }
 
 func tickForBatch() tea.Cmd {
@@ -124,10 +161,30 @@ func tickForBatch() tea.Cmd {
 	})
 }
 
-func New(parentSize model.Size, device *model.Device, filter model.Filter, color bool, softWrap bool) LogcatViewModel {
+const pidRefreshInterval = 1 * time.Second
+
+func pidRefreshTick() tea.Cmd {
+	return tea.Tick(pidRefreshInterval, func(t time.Time) tea.Msg {
+		return pidRefreshTickMsg{}
+	})
+}
+
+func refreshPIDs(deviceId string, filter string) tea.Cmd {
+	return func() tea.Msg {
+		processes, err := util.GetProcessList(deviceId)
+		if err != nil {
+			slog.Warn("Failed to get process list", "error", err)
+			return pidRefreshMsg{}
+		}
+		return pidRefreshMsg{pidSet: util.ResolvePIDs(processes, filter)}
+	}
+}
+
+func New(parentSize model.Size, device *model.Device, deviceId string, filter model.Filter, color bool, softWrap bool) LogcatViewModel {
 	m := LogcatViewModel{
 		parentSize:     parentSize,
 		device:         device,
+		deviceId:       deviceId,
 		deviceRequired: device == nil,
 		log:            util.NewRingBuffer(maxLogLines),
 		softWrap:       softWrap,
@@ -257,10 +314,28 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		)
 
 	case logcatConnectedMsg:
-		return m, tea.Batch(
+		cmds := []tea.Cmd{
 			func() tea.Msg { return readNext(m) },
 			tickForBatch(),
-		)
+		}
+		if m.filter.PackageName != "" {
+			// Start PID refresh cycle and do an immediate resolution
+			cmds = append(cmds, pidRefreshTick(), refreshPIDs(m.deviceId, m.filter.PackageName))
+		}
+		return m, tea.Batch(cmds...)
+
+	case pidRefreshTickMsg:
+		if m.filter.PackageName != "" {
+			return m, tea.Batch(
+				refreshPIDs(m.deviceId, m.filter.PackageName),
+				pidRefreshTick(),
+			)
+		}
+		return m, nil
+
+	case pidRefreshMsg:
+		m.pidSet = msg.pidSet
+		return m, nil
 
 	case logcatMsg:
 		if m.visualMode {

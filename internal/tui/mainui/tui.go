@@ -5,6 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
 	"github.com/parfenovvs/lazylogcat/internal/config"
 	"github.com/parfenovvs/lazylogcat/internal/model"
 	"github.com/parfenovvs/lazylogcat/internal/tui"
@@ -34,6 +35,13 @@ type MainModel struct {
 	logcatView logcatui.LogcatViewModel
 }
 
+func (m MainModel) deviceId() string {
+	if m.currentDevice != nil {
+		return m.currentDevice.Id
+	}
+	return ""
+}
+
 func InitMainModel(c config.Config) MainModel {
 	var m MainModel
 
@@ -49,24 +57,13 @@ func InitMainModel(c config.Config) MainModel {
 		m.deviceRequired = true
 	}
 
-	// Clear package filter if no device selected
-	if m.currentDevice == nil {
-		c.Filter.Pkg = config.TextFilter{}
-	}
-	if !c.Filter.Pkg.IsZero() {
-		_, err := util.GetPidByPackageName(m.currentDevice.Id, c.Filter.Pkg.Value)
-		if err != nil {
-			c.Filter.Pkg = config.TextFilter{}
-		}
-	}
-
 	m.filter = util.FilterFromConfig(&c)
 	m.color = util.ColorFromConfig(&c)
 	m.softWrap = true
 
 	// Always start in logcat view
 	m.state = logcatView
-	m.logcatView = logcatui.New(m.windowSize, m.currentDevice, m.filter, m.color, m.softWrap)
+	m.logcatView = logcatui.New(m.windowSize, m.currentDevice, m.deviceId(), m.filter, m.color, m.softWrap)
 
 	return m
 }
@@ -115,12 +112,6 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.filter = msg.Filter
 		m.color = msg.Color
 		m.softWrap = msg.SoftWrap
-		// Clear package filter if the package doesn't exist on the new device
-		if m.filter.PackageName != "" {
-			if _, err := util.GetPidByPackageName(msg.Device.Id, m.filter.PackageName); err != nil {
-				m.filter.PackageName = ""
-			}
-		}
 		return m, func() tea.Msg {
 			return tui.NavigateToLogcatCmd{}
 		}
@@ -128,7 +119,7 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tui.NavigateToLogcatCmd:
 		m.state = logcatView
 		logcatui.Close(&m.logcatView)
-		m.logcatView = logcatui.New(m.windowSize, m.currentDevice, m.filter, m.color, m.softWrap)
+		m.logcatView = logcatui.New(m.windowSize, m.currentDevice, m.deviceId(), m.filter, m.color, m.softWrap)
 		return m, func() tea.Msg {
 			return tui.ReconnectLogcatCmd{}
 		}
