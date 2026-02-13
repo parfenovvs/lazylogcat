@@ -66,6 +66,7 @@ type LogcatViewModel struct {
 	startSelected     int
 	err               error
 	awaitingShortcut  bool
+	connGen           uint64 // incremented on each voluntary reconnect; used to discard stale messages
 	toast             tui.ToastModel
 	showCommandDialog bool
 	commandDialog     commandui.CommandDialogModel
@@ -78,13 +79,13 @@ type logcatErrorMsg struct {
 
 type logcatConnectedMsg struct{}
 
-type logcatDisconnectedMsg struct{}
+type logcatDisconnectedMsg struct{ gen uint64 }
 
 type batchTickMsg struct{}
 
 type pidRefreshTickMsg struct{}
 
-type reconnectTickMsg struct{}
+type reconnectTickMsg struct{ gen uint64 }
 
 type pidRefreshMsg struct {
 	pidSet map[string]struct{}
@@ -98,11 +99,12 @@ type updateResult struct {
 }
 
 // watchReaderDone returns a cmd that blocks until the reader goroutine exits,
-// then delivers a logcatDisconnectedMsg to trigger auto-reconnect.
-func watchReaderDone(reader *util.LogcatReader) tea.Cmd {
+// then delivers a logcatDisconnectedMsg tagged with the connection generation
+// so the handler can discard stale notifications from previous connections.
+func watchReaderDone(reader *util.LogcatReader, gen uint64) tea.Cmd {
 	return func() tea.Msg {
 		reader.WaitForDone()
-		return logcatDisconnectedMsg{}
+		return logcatDisconnectedMsg{gen: gen}
 	}
 }
 
@@ -115,9 +117,9 @@ func tickForBatch() tea.Cmd {
 const pidRefreshInterval = 1 * time.Second
 const reconnectInterval = 2 * time.Second
 
-func reconnectTick() tea.Cmd {
+func reconnectTick(gen uint64) tea.Cmd {
 	return tea.Tick(reconnectInterval, func(t time.Time) tea.Msg {
-		return reconnectTickMsg{}
+		return reconnectTickMsg{gen: gen}
 	})
 }
 
@@ -272,6 +274,7 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		if m.device == nil {
 			return m, nil // No device selected, nothing to connect
 		}
+		m.connGen++ // invalidate any in-flight messages from the previous connection
 		m.reader.Disconnect()
 		m.log = util.NewRingBuffer(maxLogLines)
 		return m, tea.Batch(
@@ -290,7 +293,7 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 	case logcatConnectedMsg:
 		m.log = util.NewRingBuffer(maxLogLines)
 		cmds := []tea.Cmd{
-			watchReaderDone(m.reader),
+			watchReaderDone(m.reader, m.connGen),
 			tickForBatch(),
 			func() tea.Msg { return tui.MeasureCmd{} },
 		}
@@ -310,23 +313,31 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		return m, nil
 
 	case logcatDisconnectedMsg:
+		// Discard stale notifications from a previous connection generation.
+		if msg.gen != m.connGen {
+			return m, nil
+		}
 		// The reader goroutine has exited (EOF or adb crash).
-		// If already disconnected (e.g. voluntary via Disconnect()), ignore.
 		if !m.reader.IsConnected() && m.device != nil {
 			toastCmd := m.toast.Show("Reconnecting...", tui.ToastInfo)
-			return m, tea.Batch(toastCmd, reconnectTick())
+			return m, tea.Batch(toastCmd, reconnectTick(m.connGen))
 		}
 		return m, nil
 
 	case reconnectTickMsg:
-		if m.device == nil {
+		// Discard stale ticks from a previous connection generation.
+		if msg.gen != m.connGen {
 			return m, nil
 		}
+		if m.device == nil || m.reader.IsConnected() {
+			return m, nil
+		}
+		gen := m.connGen // capture for the closure
 		return m, func() tea.Msg {
 			err := m.reader.Connect(m.device.Id, m.filter)
 			if err != nil {
 				slog.Warn("Reconnect attempt failed", "error", err)
-				return logcatDisconnectedMsg{}
+				return logcatDisconnectedMsg{gen: gen}
 			}
 			return logcatConnectedMsg{}
 		}
