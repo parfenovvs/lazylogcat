@@ -1,9 +1,7 @@
 package logcatui
 
 import (
-	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"strings"
 	"time"
@@ -62,8 +60,7 @@ type LogcatViewModel struct {
 	filter            model.Filter
 	outputPrefs       model.OutputPrefs
 	log               *util.RingBuffer
-	pendingLogs       []model.LogLine
-	pidSet            map[string]struct{}
+	reader            *util.LogcatReader
 	visualMode        bool
 	currentLine       int
 	startSelected     int
@@ -73,14 +70,7 @@ type LogcatViewModel struct {
 	showCommandDialog bool
 	commandDialog     commandui.CommandDialogModel
 	deviceRequired    bool
-	voluntaryClose    bool
 }
-
-type logcatMsg struct {
-	Line model.LogLine
-}
-
-type logcatEmptyMsg struct{}
 
 type logcatErrorMsg struct {
 	Err error
@@ -107,23 +97,13 @@ type updateResult struct {
 	consumed    bool // when true, the key is fully handled and must not be forwarded to the viewport
 }
 
-func readNext(m LogcatViewModel) tea.Msg {
-	raw, err := util.ReadNextLogLine()
-	if err != nil {
-		if errors.Is(err, io.EOF) {
-			return logcatDisconnectedMsg{}
-		}
-		slog.Warn("Error reading logcat line", "error", err)
+// watchReaderDone returns a cmd that blocks until the reader goroutine exits,
+// then delivers a logcatDisconnectedMsg to trigger auto-reconnect.
+func watchReaderDone(reader *util.LogcatReader) tea.Cmd {
+	return func() tea.Msg {
+		reader.WaitForDone()
 		return logcatDisconnectedMsg{}
 	}
-
-	line := model.ParseLogLine(raw)
-
-	if !matchesFilter(raw, line, &m.filter, m.pidSet) {
-		return logcatEmptyMsg{}
-	}
-
-	return logcatMsg{Line: line}
 }
 
 func tickForBatch() tea.Cmd {
@@ -165,6 +145,7 @@ func New(parentSize model.Size, device *model.Device, deviceId string, filter mo
 		deviceId:       deviceId,
 		deviceRequired: device == nil,
 		log:            util.NewRingBuffer(maxLogLines),
+		reader:         util.NewLogcatReader(),
 		startSelected:  -1,
 		filter:         filter,
 		outputPrefs:    outputPrefs,
@@ -227,7 +208,7 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		case model.CommandPackage:
 			m.filter.PackageName = msg.Filter
 			if msg.Filter.IsEmpty() {
-				m.pidSet = nil
+				m.reader.UpdatePIDSet(nil)
 			}
 			return m, func() tea.Msg { return tui.ReconnectLogcatCmd{} }
 		case model.CommandTag:
@@ -291,13 +272,11 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		if m.device == nil {
 			return m, nil // No device selected, nothing to connect
 		}
-		m.voluntaryClose = true
-		util.CloseLogcat()
+		m.reader.Disconnect()
 		m.log = util.NewRingBuffer(maxLogLines)
-		m.pendingLogs = nil
 		return m, tea.Batch(
 			func() tea.Msg {
-				err := util.ConnectLogcat(m.device.Id, m.filter)
+				err := m.reader.Connect(m.device.Id, m.filter)
 				if err != nil {
 					return logcatErrorMsg{Err: err}
 				}
@@ -309,11 +288,9 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		)
 
 	case logcatConnectedMsg:
-		m.voluntaryClose = false
 		m.log = util.NewRingBuffer(maxLogLines)
-		m.pendingLogs = nil
 		cmds := []tea.Cmd{
-			func() tea.Msg { return readNext(m) },
+			watchReaderDone(m.reader),
 			tickForBatch(),
 			func() tea.Msg { return tui.MeasureCmd{} },
 		}
@@ -333,20 +310,20 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		return m, nil
 
 	case logcatDisconnectedMsg:
-		if m.voluntaryClose {
-			m.voluntaryClose = false
-			return m, nil
+		// The reader goroutine has exited (EOF or adb crash).
+		// If already disconnected (e.g. voluntary via Disconnect()), ignore.
+		if !m.reader.IsConnected() && m.device != nil {
+			toastCmd := m.toast.Show("Reconnecting...", tui.ToastInfo)
+			return m, tea.Batch(toastCmd, reconnectTick())
 		}
-		util.CloseLogcat()
-		toastCmd := m.toast.Show("Reconnecting...", tui.ToastInfo)
-		return m, tea.Batch(toastCmd, reconnectTick())
+		return m, nil
 
 	case reconnectTickMsg:
 		if m.device == nil {
 			return m, nil
 		}
 		return m, func() tea.Msg {
-			err := util.ConnectLogcat(m.device.Id, m.filter)
+			err := m.reader.Connect(m.device.Id, m.filter)
 			if err != nil {
 				slog.Warn("Reconnect attempt failed", "error", err)
 				return logcatDisconnectedMsg{}
@@ -355,43 +332,27 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		}
 
 	case pidRefreshMsg:
-		m.pidSet = msg.pidSet
+		m.reader.UpdatePIDSet(msg.pidSet)
 		return m, nil
 
-	case logcatMsg:
-		if m.visualMode {
-			return m, nil
-		}
-		m.pendingLogs = append(m.pendingLogs, msg.Line)
-		return m, func() tea.Msg {
-			return readNext(m)
-		}
-
-	case logcatEmptyMsg:
-		if m.visualMode {
-			return m, nil
-		}
-		return m, func() tea.Msg {
-			return readNext(m)
-		}
-
 	case batchTickMsg:
-		if !m.visualMode && len(m.pendingLogs) > 0 {
-			wasAtBottom := m.viewport.AtBottom()
-			for _, line := range m.pendingLogs {
-				m.log.Append(line)
-			}
-			m.pendingLogs = nil
-			needsRender = true
-			if wasAtBottom {
-				gotoBottom = true
+		if !m.visualMode {
+			if lines := m.reader.Drain(); len(lines) > 0 {
+				wasAtBottom := m.viewport.AtBottom()
+				for _, line := range lines {
+					m.log.Append(line)
+				}
+				needsRender = true
+				if wasAtBottom {
+					gotoBottom = true
+				}
 			}
 		}
 		cmds = append(cmds, tickForBatch())
 
 	case logcatErrorMsg:
 		m.err = msg.Err
-		util.CloseLogcat()
+		m.reader.Disconnect()
 		return m, nil
 	}
 
@@ -600,9 +561,9 @@ func (m *LogcatViewModel) handleGlobalKey(key string) (updateResult, bool) {
 			m.currentLine = m.log.Size() - 1
 			return updateResult{needsRender: true}, true
 		}
-		return updateResult{
-			cmd: func() tea.Msg { return tui.ReconnectLogcatCmd{} },
-		}, true
+		// Reader goroutine kept running during visual mode;
+		// next batchTickMsg will drain accumulated lines.
+		return updateResult{needsRender: true}, true
 	}
 
 	return updateResult{}, false
@@ -689,9 +650,9 @@ func (m *LogcatViewModel) handleVisualModeKey(key string) updateResult {
 	case "esc":
 		m.visualMode = false
 		m.startSelected = -1
-		return updateResult{
-			cmd: func() tea.Msg { return tui.ReconnectLogcatCmd{} },
-		}
+		// Reader goroutine kept running during visual mode;
+		// next batchTickMsg will drain accumulated lines.
+		return updateResult{needsRender: true}
 
 	case "y":
 		if m.currentLine >= 0 && m.currentLine < m.log.Size() {
@@ -937,6 +898,6 @@ func (m LogcatViewModel) footerView() string {
 }
 
 func Close(m *LogcatViewModel) {
-	util.CloseLogcat()
+	m.reader.Disconnect()
 	m.log = util.NewRingBuffer(maxLogLines)
 }

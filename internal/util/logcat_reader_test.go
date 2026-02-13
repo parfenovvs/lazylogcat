@@ -497,3 +497,59 @@ func TestMatchesFilterPIDSet(t *testing.T) {
 		}
 	})
 }
+
+func TestWaitForDoneNotConnected(t *testing.T) {
+	r := NewLogcatReader()
+	// WaitForDone should return immediately when never connected
+	done := make(chan struct{})
+	go func() {
+		r.WaitForDone()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(1 * time.Second):
+		t.Fatal("WaitForDone() did not return for disconnected reader")
+	}
+}
+
+func TestWaitForDoneBlocksUntilEOF(t *testing.T) {
+	input := "02-08 12:00:00.000  1000  1001 D Tag: msg\n"
+	r := startTestReader(t, input, model.Filter{}, nil)
+
+	done := make(chan struct{})
+	go func() {
+		r.WaitForDone()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("WaitForDone() did not return after readLoop exited")
+	}
+
+	if r.IsConnected() {
+		t.Error("reader should be disconnected after WaitForDone returns")
+	}
+}
+
+func TestPendingCap(t *testing.T) {
+	// Generate input larger than maxPendingLines
+	var b strings.Builder
+	total := maxPendingLines + 500
+	for range total {
+		b.WriteString("02-08 12:00:00.000  1000  1001 D Tag: msg\n")
+	}
+
+	r := startTestReader(t, b.String(), model.Filter{}, nil)
+	waitForDone(t, r)
+
+	lines := r.Drain()
+	if len(lines) > maxPendingLines {
+		t.Errorf("pending exceeded cap: got %d, max %d", len(lines), maxPendingLines)
+	}
+	if len(lines) != maxPendingLines {
+		t.Errorf("expected exactly %d lines (cap reached), got %d", maxPendingLines, len(lines))
+	}
+}

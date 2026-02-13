@@ -14,9 +14,10 @@ import (
 )
 
 const (
-	initialLogLines = 1000
+	initialLogLines = 20000
 	scannerBufSize  = 256 * 1024 // 256 KB scanner buffer
 	pendingInitCap  = 256        // initial capacity for the pending slice
+	maxPendingLines = 20000      // cap to prevent unbounded growth (e.g. during visual mode)
 )
 
 // LogcatReader encapsulates all logcat reading, parsing, and filtering
@@ -187,6 +188,18 @@ func (r *LogcatReader) Err() error {
 	return r.lastErr
 }
 
+// WaitForDone blocks until the reader goroutine exits. Returns immediately
+// if no goroutine is running. Intended for use as a tea.Cmd to detect
+// when the adb process terminates (EOF / error).
+func (r *LogcatReader) WaitForDone() {
+	r.mu.Lock()
+	done := r.done
+	r.mu.Unlock()
+	if done != nil {
+		<-done
+	}
+}
+
 // readLoop is the core goroutine. It reads from the scanner in a tight loop,
 // parses each line, applies the current filter, and appends passing lines to
 // the pending buffer.
@@ -214,7 +227,9 @@ func (r *LogcatReader) readLoop(ctx context.Context, scanner *bufio.Scanner) {
 		}
 
 		r.mu.Lock()
-		r.pending = append(r.pending, line)
+		if len(r.pending) < maxPendingLines {
+			r.pending = append(r.pending, line)
+		}
 		r.mu.Unlock()
 	}
 
