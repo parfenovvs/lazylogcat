@@ -14,10 +14,10 @@ import (
 )
 
 const (
-	initialLogLines = 20000
+	initialLogLines = 10000
 	scannerBufSize  = 256 * 1024 // 256 KB scanner buffer
 	pendingInitCap  = 256        // initial capacity for the pending slice
-	maxPendingLines = 20000      // cap to prevent unbounded growth (e.g. during visual mode)
+	maxPendingLines = 10000      // cap to prevent unbounded growth (e.g. during visual mode)
 )
 
 // LogcatReader encapsulates all logcat reading, parsing, and filtering
