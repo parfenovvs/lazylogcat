@@ -163,11 +163,12 @@ func New(parentSize model.Size, device *model.Device, deviceId string, filter mo
 
 func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 	var (
-		cmd         tea.Cmd
-		cmds        []tea.Cmd
-		needsRender bool
-		gotoBottom  bool
-		keyConsumed bool
+		cmd           tea.Cmd
+		cmds          []tea.Cmd
+		needsRender   bool
+		gotoBottom    bool
+		keyConsumed   bool
+		yOffsetAdjust int // visual lines evicted from the top; used to stabilise scroll position
 	)
 
 	switch msg := msg.(type) {
@@ -350,6 +351,30 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		if !m.visualMode {
 			if lines := m.reader.Drain(); len(lines) > 0 {
 				wasAtBottom := m.viewport.AtBottom()
+
+				// When the user has scrolled up and the ring buffer is at
+				// capacity, each Append evicts the oldest line from the top
+				// of the content. Count the visual lines that will be lost
+				// so we can adjust YOffset after Render to keep the
+				// viewport pinned to the same content.
+				if !wasAtBottom && m.log.Size() >= maxLogLines {
+					evictCount := min(len(lines), maxLogLines)
+					oldest := m.log.All()
+					cols := m.outputPrefs.Columns
+					for i := 0; i < evictCount && i < len(oldest); i++ {
+						if m.outputPrefs.SoftWrap {
+							rendered := softWrapIndent(
+								oldest[i].ModifiedString(cols),
+								oldest[i].PrefixWidth(cols),
+								m.viewport.Width,
+							)
+							yOffsetAdjust += lipgloss.Height(rendered)
+						} else {
+							yOffsetAdjust++
+						}
+					}
+				}
+
 				for _, line := range lines {
 					m.log.Append(line)
 				}
@@ -372,6 +397,14 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 	}
 	if gotoBottom {
 		m.viewport.GotoBottom()
+	} else if yOffsetAdjust > 0 {
+		// Compensate for lines evicted from the top of the ring buffer
+		// so that the viewport stays pinned to the same content.
+		newOffset := m.viewport.YOffset - yOffsetAdjust
+		if newOffset < 0 {
+			newOffset = 0
+		}
+		m.viewport.SetYOffset(newOffset)
 	}
 
 	// Viewport update for non-visual mode scrolling (skip internal tick messages)
