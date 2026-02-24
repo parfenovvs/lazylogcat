@@ -15,6 +15,8 @@ Reading Android logcat logs shouldn't require heavy tooling:
 
 lazylogcat provides a lightweight, focused TUI for viewing and filtering logcat logs without the overhead.
 
+![demo](demo.svg)
+
 ## Prerequisites
 
 - `adb` (Android Debug Bridge) installed and in PATH (see [ADB Installation Guide](https://developer.android.com/tools/adb))
