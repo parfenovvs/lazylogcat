@@ -3,6 +3,7 @@ package logcatui
 import (
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 	"time"
 
@@ -228,6 +229,8 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		case model.CommandReconnect:
 			m.visualMode = false
 			return m, func() tea.Msg { return tui.ReconnectLogcatCmd{} }
+		case model.CommandExportBuffer:
+			return m, m.exportBuffer()
 		case model.CommandExit:
 			return m, func() tea.Msg { return tui.ExitCmd{} }
 		}
@@ -934,6 +937,30 @@ func (m LogcatViewModel) footerView() string {
 		Render(helpText)
 
 	return help
+}
+
+// exportBuffer writes all buffered log lines to a timestamped file in the
+// working directory. Returns a tea.Cmd that shows a toast on success or error.
+func (m *LogcatViewModel) exportBuffer() tea.Cmd {
+	lines := m.log.All()
+	if len(lines) == 0 {
+		return m.toast.Show("Buffer is empty, nothing to export", tui.ToastWarning)
+	}
+
+	var sb strings.Builder
+	for _, l := range lines {
+		sb.WriteString(strings.TrimSpace(l.ModifiedString(m.outputPrefs.Columns)))
+		sb.WriteByte('\n')
+	}
+
+	filename := fmt.Sprintf("logcat_%s.log", time.Now().Format("20060102_150405"))
+	if err := os.WriteFile(filename, []byte(sb.String()), 0644); err != nil {
+		slog.Error("Failed to export buffer", "error", err)
+		return m.toast.Show("Export failed: "+err.Error(), tui.ToastError)
+	}
+
+	slog.Debug("Buffer exported", "file", filename, "lines", len(lines))
+	return m.toast.Show(fmt.Sprintf("Exported %d lines to %s", len(lines), filename), tui.ToastInfo)
 }
 
 func Close(m *LogcatViewModel) {

@@ -17,6 +17,7 @@ const (
 	CommandDevices
 
 	// Other
+	CommandExportBuffer
 	CommandExit
 )
 
@@ -67,6 +68,7 @@ func Commands() []CommandGroup {
 		{
 			Name: "Other",
 			Commands: []CommandData{
+				{Command: CommandExportBuffer, Type: CommandTypeAction, Name: "Export buffer"},
 				{Command: CommandExit, Type: CommandTypeAction, Name: "Exit", Shortcut: "ctrl+c"},
 			},
 		},
