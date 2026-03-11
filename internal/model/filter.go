@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/json"
 	"regexp"
 	"strings"
 )
@@ -46,10 +47,40 @@ func (m TextFilterMode) String() string {
 
 // TextFilter holds a text filter value together with its matching mode.
 type TextFilter struct {
-	Value      string
-	Mode       TextFilterMode
+	Value      string         `json:"value"`
+	Mode       TextFilterMode `json:"mode"`
 	compiled   *regexp.Regexp
 	compileErr error
+}
+
+// MarshalJSON outputs the short form (just the value string) when Mode is
+// the default (FilterModeContains). When a non-default mode is set, the
+// full object form is emitted.
+func (tf TextFilter) MarshalJSON() ([]byte, error) {
+	if tf.Mode == FilterModeContains {
+		return json.Marshal(tf.Value)
+	}
+	return json.Marshal(struct {
+		Value string         `json:"value"`
+		Mode  TextFilterMode `json:"mode"`
+	}{
+		Value: tf.Value,
+		Mode:  tf.Mode,
+	})
+}
+
+// UnmarshalJSON supports both a plain string and an object form.
+// Plain string: "hello" -> TextFilter{Value: "hello", Mode: FilterModeContains}
+// Object form: {"value": "hello", "mode": 1} -> TextFilter{Value: "hello", Mode: FilterModeExact}
+func (tf *TextFilter) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err == nil {
+		tf.Value = s
+		tf.Mode = FilterModeContains
+		return nil
+	}
+	type alias TextFilter
+	return json.Unmarshal(data, (*alias)(tf))
 }
 
 // IsEmpty returns true if the filter has no meaningful value set.
@@ -146,10 +177,10 @@ func (tf *TextFilter) Match(haystack string) bool {
 }
 
 type Filter struct {
-	PackageName TextFilter
-	Level       Level
-	Tag         TextFilter
-	Text        TextFilter
+	PackageName TextFilter `json:"packageName"`
+	Level       Level      `json:"level"`
+	Tag         TextFilter `json:"tag"`
+	Text        TextFilter `json:"text"`
 }
 
 func (f *Filter) IsEmpty() bool {

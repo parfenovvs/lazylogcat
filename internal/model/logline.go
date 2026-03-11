@@ -15,14 +15,14 @@ import (
 // If the line cannot be parsed (e.g. separator lines like "--------- beginning of main"),
 // only Raw is populated and the parsed fields remain empty.
 type LogLine struct {
-	Date    string
-	Time    string
-	PID     string
-	TID     string
-	Level   string
-	Tag     string
-	Message string
-	Raw     string
+	Date    string `json:"date"`
+	Time    string `json:"time"`
+	PID     string `json:"pid"`
+	TID     string `json:"tid"`
+	Level   string `json:"level"`
+	Tag     string `json:"tag"`
+	Message string `json:"message"`
+	Raw     string `json:"raw"`
 }
 
 // ParseLogLine parses a raw logcat line in the threadtime format into a LogLine.

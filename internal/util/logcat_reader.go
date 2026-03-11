@@ -219,7 +219,7 @@ func (r *LogcatReader) readLoop(ctx context.Context, scanner *bufio.Scanner) {
 		line := model.ParseLogLine(raw)
 
 		r.filterMu.RLock()
-		pass := matchesFilter(raw, line, &r.filter, r.pidSet)
+		pass := MatchesFilter(raw, line, &r.filter, r.pidSet)
 		r.filterMu.RUnlock()
 
 		if !pass {
@@ -241,9 +241,9 @@ func (r *LogcatReader) readLoop(ctx context.Context, scanner *bufio.Scanner) {
 	r.mu.Unlock()
 }
 
-// matchesFilter reports whether a raw log line (and its parsed form)
+// MatchesFilter reports whether a raw log line (and its parsed form)
 // passes all active filters. Returns false when the line should be skipped.
-func matchesFilter(raw string, line model.LogLine, filter *model.Filter, pidSet map[string]struct{}) bool {
+func MatchesFilter(raw string, line model.LogLine, filter *model.Filter, pidSet map[string]struct{}) bool {
 	// Filter empty lines (threadtime format never produces meaningful empty lines)
 	if strings.Trim(raw, "\n\r ") == "" {
 		return false

@@ -23,6 +23,17 @@ jobs:
           go-version: "1.24"
           cache: true
 
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install JS dependencies
+        working-directory: web-ui
+        run: bun install
+
+      - name: Build frontend
+        working-directory: web-ui
+        run: bun run build
+
       - name: Download dependencies
         run: go mod download
 

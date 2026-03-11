@@ -375,10 +375,10 @@ func TestReadLoopConcurrentDrain(t *testing.T) {
 
 func TestMatchesFilterEmptyLine(t *testing.T) {
 	f := model.Filter{}
-	if matchesFilter("", model.LogLine{}, &f, nil) {
+	if MatchesFilter("", model.LogLine{}, &f, nil) {
 		t.Error("empty line should not pass filter")
 	}
-	if matchesFilter("  \n\r ", model.LogLine{}, &f, nil) {
+	if MatchesFilter("  \n\r ", model.LogLine{}, &f, nil) {
 		t.Error("whitespace-only line should not pass filter")
 	}
 }
@@ -387,7 +387,7 @@ func TestMatchesFilterNoFilter(t *testing.T) {
 	f := model.Filter{}
 	raw := "02-08 12:00:00.000  1000  1001 D Tag: message"
 	line := model.ParseLogLine(raw)
-	if !matchesFilter(raw, line, &f, nil) {
+	if !MatchesFilter(raw, line, &f, nil) {
 		t.Error("line should pass empty filter")
 	}
 }
@@ -408,9 +408,9 @@ func TestMatchesFilterTextContains(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			line := model.ParseLogLine(tt.raw)
-			got := matchesFilter(tt.raw, line, &f, nil)
+			got := MatchesFilter(tt.raw, line, &f, nil)
 			if got != tt.want {
-				t.Errorf("matchesFilter() = %v, want %v", got, tt.want)
+				t.Errorf("MatchesFilter() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -434,9 +434,9 @@ func TestMatchesFilterLevelThreshold(t *testing.T) {
 			raw := "02-08 12:00:00.000  1000  1001 " + tt.lineLevel + " Tag: message"
 			line := model.ParseLogLine(raw)
 			f := model.Filter{Level: tt.filterLvl}
-			got := matchesFilter(raw, line, &f, nil)
+			got := MatchesFilter(raw, line, &f, nil)
 			if got != tt.want {
-				t.Errorf("matchesFilter() = %v, want %v", got, tt.want)
+				t.Errorf("MatchesFilter() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -461,9 +461,9 @@ func TestMatchesFilterTag(t *testing.T) {
 			f := model.Filter{
 				Tag: model.TextFilter{Value: tt.tagValue, Mode: tt.mode},
 			}
-			got := matchesFilter(raw, line, &f, nil)
+			got := MatchesFilter(raw, line, &f, nil)
 			if got != tt.want {
-				t.Errorf("matchesFilter() = %v, want %v", got, tt.want)
+				t.Errorf("MatchesFilter() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -476,7 +476,7 @@ func TestMatchesFilterPIDSet(t *testing.T) {
 	t.Run("InSet", func(t *testing.T) {
 		f := model.Filter{PackageName: model.TextFilter{Value: "com.app"}}
 		pids := map[string]struct{}{"1000": {}}
-		if !matchesFilter(raw, line, &f, pids) {
+		if !MatchesFilter(raw, line, &f, pids) {
 			t.Error("line with PID in set should pass")
 		}
 	})
@@ -484,7 +484,7 @@ func TestMatchesFilterPIDSet(t *testing.T) {
 	t.Run("NotInSet", func(t *testing.T) {
 		f := model.Filter{PackageName: model.TextFilter{Value: "com.app"}}
 		pids := map[string]struct{}{"9999": {}}
-		if matchesFilter(raw, line, &f, pids) {
+		if MatchesFilter(raw, line, &f, pids) {
 			t.Error("line with PID not in set should not pass")
 		}
 	})
@@ -492,7 +492,7 @@ func TestMatchesFilterPIDSet(t *testing.T) {
 	t.Run("EmptySet", func(t *testing.T) {
 		f := model.Filter{PackageName: model.TextFilter{Value: "com.app"}}
 		pids := map[string]struct{}{}
-		if matchesFilter(raw, line, &f, pids) {
+		if MatchesFilter(raw, line, &f, pids) {
 			t.Error("line should not pass with empty PID set when package filter is active")
 		}
 	})
