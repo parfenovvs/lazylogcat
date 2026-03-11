@@ -18,6 +18,8 @@ const (
 
 	// Other
 	CommandExportBuffer
+	CommandStartRecording
+	CommandStopRecording
 	CommandExit
 )
 
@@ -69,6 +71,8 @@ func Commands() []CommandGroup {
 			Name: "Other",
 			Commands: []CommandData{
 				{Command: CommandExportBuffer, Type: CommandTypeAction, Name: "Export buffer"},
+				{Command: CommandStartRecording, Type: CommandTypeAction, Name: "Start recording"},
+				{Command: CommandStopRecording, Type: CommandTypeAction, Name: "Stop recording"},
 				{Command: CommandExit, Type: CommandTypeAction, Name: "Exit", Shortcut: "ctrl+c"},
 			},
 		},

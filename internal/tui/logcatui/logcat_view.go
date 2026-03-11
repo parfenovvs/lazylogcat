@@ -67,10 +67,11 @@ type LogcatViewModel struct {
 	startSelected     int
 	awaitingShortcut  bool
 	connGen           uint64 // incremented on each voluntary reconnect; used to discard stale messages
-	toast             tui.ToastModel
-	showCommandDialog bool
-	commandDialog     commandui.CommandDialogModel
-	deviceRequired    bool
+	toast              tui.ToastModel
+	showCommandDialog  bool
+	commandDialog      commandui.CommandDialogModel
+	deviceRequired     bool
+	recordingStartTime *time.Time
 }
 
 type logcatErrorMsg struct {
@@ -231,6 +232,10 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 			return m, func() tea.Msg { return tui.ReconnectLogcatCmd{} }
 		case model.CommandExportBuffer:
 			return m, m.exportBuffer()
+		case model.CommandStartRecording:
+			return m, m.startRecording()
+		case model.CommandStopRecording:
+			return m, m.stopRecording()
 		case model.CommandExit:
 			return m, func() tea.Msg { return tui.ExitCmd{} }
 		}
@@ -634,6 +639,7 @@ func (m *LogcatViewModel) handleNormalModeKey(key string) updateResult {
 			OutputPrefs:    m.outputPrefs,
 			SelectedDevice: m.device,
 			DeviceId:       deviceId,
+			Recording:      m.recordingStartTime != nil,
 		})
 		return updateResult{needsRender: true}
 
@@ -672,6 +678,7 @@ func (m *LogcatViewModel) handleShortcutKey(key string) updateResult {
 		Filter:         m.filter,
 		OutputPrefs:    m.outputPrefs,
 		SelectedDevice: m.device,
+		Recording:      m.recordingStartTime != nil,
 	}
 	if m.device != nil {
 		cfg.DeviceId = m.device.Id
@@ -856,6 +863,10 @@ func (m LogcatViewModel) headerView() string {
 	} else {
 		name = "No device"
 	}
+	if m.recordingStartTime != nil {
+		recDot := lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render("●")
+		name = recDot + " " + name
+	}
 	deviceName := lipgloss.NewStyle().Bold(true).Render(name)
 
 	// Build filter parts: package, tag, content (text), log level
@@ -961,6 +972,57 @@ func (m *LogcatViewModel) exportBuffer() tea.Cmd {
 
 	slog.Debug("Buffer exported", "file", filename, "lines", len(lines))
 	return m.toast.Show(fmt.Sprintf("Exported %d lines to %s", len(lines), filename), tui.ToastInfo)
+}
+
+func (m *LogcatViewModel) startRecording() tea.Cmd {
+	now := time.Now()
+	m.recordingStartTime = &now
+	slog.Debug("Recording started", "time", now)
+	return m.toast.Show("Recording started", tui.ToastInfo)
+}
+
+func (m *LogcatViewModel) stopRecording() tea.Cmd {
+	startTime := m.recordingStartTime
+	m.recordingStartTime = nil
+
+	lines := m.log.All()
+	var recorded []model.LogLine
+	for _, l := range lines {
+		if t, ok := parseLogLineTime(l); !ok || !t.Before(*startTime) {
+			recorded = append(recorded, l)
+		}
+	}
+
+	if len(recorded) == 0 {
+		return m.toast.Show("No lines recorded", tui.ToastWarning)
+	}
+
+	var sb strings.Builder
+	for _, l := range recorded {
+		sb.WriteString(strings.TrimSpace(l.ModifiedString(m.outputPrefs.Columns)))
+		sb.WriteByte('\n')
+	}
+
+	filename := fmt.Sprintf("logcat_rec_%s.log", time.Now().Format("20060102_150405"))
+	if err := os.WriteFile(filename, []byte(sb.String()), 0644); err != nil {
+		slog.Error("Failed to save recording", "error", err)
+		return m.toast.Show("Export failed: "+err.Error(), tui.ToastError)
+	}
+
+	slog.Debug("Recording saved", "file", filename, "lines", len(recorded))
+	return m.toast.Show(fmt.Sprintf("Recorded %d lines to %s", len(recorded), filename), tui.ToastInfo)
+}
+
+// parseLogLineTime parses the Date and Time fields of a log line into a time.Time.
+// Returns (time, true) on success, or (zero, false) if the line is unparsed or malformed.
+func parseLogLineTime(l model.LogLine) (time.Time, bool) {
+	if !l.Parsed() {
+		return time.Time{}, false
+	}
+	year := time.Now().Year()
+	str := fmt.Sprintf("%d-%s %s", year, l.Date, l.Time)
+	t, err := time.Parse("2006-01-02 15:04:05.000", str)
+	return t, err == nil
 }
 
 func Close(m *LogcatViewModel) {

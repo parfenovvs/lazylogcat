@@ -21,6 +21,7 @@ type DialogConfig struct {
 	OutputPrefs    model.OutputPrefs
 	SelectedDevice *model.Device
 	DeviceId       string
+	Recording      bool
 }
 
 type CommandDialogCloseMsg struct{}
@@ -136,6 +137,12 @@ func NewDialog(cfg DialogConfig) CommandDialogModel {
 		groupName := lipgloss.NewStyle().Bold(true).Render(group.Name)
 		rows = append(rows, table.Row{groupName, "", ""})
 		for _, cmd := range group.Commands {
+			if cmd.Command == model.CommandStartRecording && cfg.Recording {
+				continue
+			}
+			if cmd.Command == model.CommandStopRecording && !cfg.Recording {
+				continue
+			}
 			commandMap[len(rows)] = cmd
 			value := truncateMiddle(resolveValue(cmd.Command), 10)
 			rows = append(rows, table.Row{cmd.Name, value, cmd.Shortcut})
