@@ -255,7 +255,6 @@ export default function App() {
       )}
 
       <StatusBar
-        lineCount={lines.length}
         activeDevice={activeDevice}
         connected={connected}
         autoScroll={autoScroll}

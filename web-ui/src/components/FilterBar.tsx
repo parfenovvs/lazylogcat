@@ -71,7 +71,7 @@ export default function FilterBar({ onFilterChange, disabled }: FilterBarProps) 
         size="small"
       >
         {LEVELS.map((l) => (
-          <ToggleButton key={l} value={l}>
+          <ToggleButton key={l} value={l} sx={{ width: 32, minWidth: 0, px: 0 }}>
             {l}
           </ToggleButton>
         ))}

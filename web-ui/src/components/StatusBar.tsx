@@ -4,7 +4,6 @@ import Button from "@mui/material/Button";
 import Switch from "@mui/material/Switch";
 
 interface StatusBarProps {
-  lineCount: number;
   activeDevice: string | null;
   connected: boolean;
   autoScroll: boolean;
@@ -13,7 +12,6 @@ interface StatusBarProps {
 }
 
 export default function StatusBar({
-  lineCount,
   activeDevice,
   connected,
   autoScroll,
@@ -31,13 +29,6 @@ export default function StatusBar({
       borderColor="divider"
     >
       <Box display="flex" alignItems="center" gap={1}>
-        <Typography variant="body2" color="text.secondary">
-          <Typography variant="body2" component="span" color="primary">
-            {lineCount.toLocaleString()}
-          </Typography>
-          {" lines"}
-        </Typography>
-
         {activeDevice && connected && (
           <Typography variant="body2" color="text.disabled">
             {activeDevice}
