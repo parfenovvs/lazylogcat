@@ -6,21 +6,31 @@ import (
 	"net/http"
 
 	"github.com/parfenovvs/lazylogcat/internal/config"
+	"github.com/parfenovvs/lazylogcat/internal/model"
 	"github.com/parfenovvs/lazylogcat/internal/util"
 )
 
 // handleDevices returns the list of connected ADB devices as JSON.
-func handleDevices(w http.ResponseWriter, r *http.Request) {
-	devices, err := util.GetConnectedDevices()
-	if err != nil {
-		slog.Error("Failed to get devices", "error", err)
-		http.Error(w, `{"error":"failed to get devices"}`, http.StatusInternalServerError)
-		return
-	}
+// In demo mode it returns a single fake device.
+func handleDevices(demo bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var devices []model.Device
+		if demo {
+			devices = []model.Device{demoDevice}
+		} else {
+			var err error
+			devices, err = util.GetConnectedDevices()
+			if err != nil {
+				slog.Error("Failed to get devices", "error", err)
+				http.Error(w, `{"error":"failed to get devices"}`, http.StatusInternalServerError)
+				return
+			}
+		}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(devices); err != nil {
-		slog.Error("Failed to encode devices", "error", err)
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(devices); err != nil {
+			slog.Error("Failed to encode devices", "error", err)
+		}
 	}
 }
 

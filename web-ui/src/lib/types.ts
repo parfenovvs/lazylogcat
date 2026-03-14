@@ -94,3 +94,5 @@ export type ClientMessage =
   | DisconnectCommand
   | UpdateFilterCommand
   | ListDevicesCommand;
+
+export type LogLevel = "V" | "D" | "I" | "W" | "E" | "F" | "S" | string;

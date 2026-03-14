@@ -1,31 +1,60 @@
-import { createSignal, onCleanup, onMount, For } from "solid-js";
-import type { LogLine, Device, ServerMessage } from "./lib/types";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+
+import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
+import Alert from "@mui/material/Alert";
+import FiberManualRecord from "@mui/icons-material/FiberManualRecord";
+import RadioButtonChecked from "@mui/icons-material/RadioButtonChecked";
+
+import type { LogLine, Device, ServerMessage, Filter } from "./lib/types";
 import { LogcatWebSocket, getWebSocketUrl } from "./lib/ws";
+import DeviceBar from "./components/DeviceBar";
+import FilterBar from "./components/FilterBar";
+import LogRow from "./components/LogRow";
+import StatusBar from "./components/StatusBar";
+
+const MAX_LINES = 10_000;
+const ROW_HEIGHT_ESTIMATE = 28;
+const COL_HEADER_HEIGHT = 32;
 
 export default function App() {
-  const [lines, setLines] = createSignal<LogLine[]>([]);
-  const [devices, setDevices] = createSignal<Device[]>([]);
-  const [connected, setConnected] = createSignal(false);
-  const [wsConnected, setWsConnected] = createSignal(false);
-  const [activeDevice, setActiveDevice] = createSignal<string | null>(null);
-  const [error, setError] = createSignal<string | null>(null);
+  const [lines, setLines] = useState<LogLine[]>([]);
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [connected, setConnected] = useState(false);
+  const [wsConnected, setWsConnected] = useState(false);
+  const [activeDevice, setActiveDevice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [autoScroll, setAutoScroll] = useState(true);
 
-  let ws: LogcatWebSocket | null = null;
-  let logContainer: HTMLPreElement | undefined;
+  const wsRef = useRef<LogcatWebSocket | null>(null);
+  const logContainerRef = useRef<HTMLDivElement>(null);
+  const autoScrollRef = useRef(true);
 
-  const handleMessage = (msg: ServerMessage) => {
+  useEffect(() => {
+    autoScrollRef.current = autoScroll;
+  }, [autoScroll]);
+
+  const virtualizer = useVirtualizer({
+    count: lines.length,
+    getScrollElement: () => logContainerRef.current,
+    estimateSize: () => ROW_HEIGHT_ESTIMATE,
+    overscan: 30,
+    paddingStart: COL_HEADER_HEIGHT,
+  });
+
+  useEffect(() => {
+    if (autoScrollRef.current && lines.length > 0) {
+      virtualizer.scrollToIndex(lines.length - 1, { align: "end" });
+    }
+  }, [lines.length, virtualizer]);
+
+  const handleMessage = useCallback((msg: ServerMessage) => {
     switch (msg.type) {
       case "lines":
         setLines((prev) => {
           const next = [...prev, ...msg.data];
-          // Keep last 10000 lines in the UI
-          return next.length > 10000 ? next.slice(-10000) : next;
-        });
-        // Auto-scroll to bottom
-        requestAnimationFrame(() => {
-          if (logContainer) {
-            logContainer.scrollTop = logContainer.scrollHeight;
-          }
+          return next.length > MAX_LINES ? next.slice(-MAX_LINES) : next;
         });
         break;
       case "connected":
@@ -44,109 +73,195 @@ export default function App() {
         setError(msg.message);
         break;
     }
-  };
+  }, []);
 
-  const handleStatus = (connected: boolean) => {
-    setWsConnected(connected);
-  };
+  const handleStatus = useCallback((c: boolean) => {
+    setWsConnected(c);
+  }, []);
 
-  onMount(() => {
-    ws = new LogcatWebSocket(getWebSocketUrl(), handleMessage, handleStatus);
+  useEffect(() => {
+    const ws = new LogcatWebSocket(getWebSocketUrl(), handleMessage, handleStatus);
+    wsRef.current = ws;
     ws.connect();
-    // Request device list on connect
-    setTimeout(() => {
-      ws?.send({ type: "listDevices" });
+    const timer = setTimeout(() => {
+      ws.send({ type: "listDevices" });
     }, 500);
-  });
+    return () => {
+      clearTimeout(timer);
+      ws.disconnect();
+    };
+  }, [handleMessage, handleStatus]);
 
-  onCleanup(() => {
-    ws?.disconnect();
-  });
-
-  const connectToDevice = (deviceId: string) => {
+  const connectToDevice = useCallback((deviceId: string) => {
     setLines([]);
     setError(null);
-    ws?.send({ type: "connect", deviceId });
-  };
+    wsRef.current?.send({ type: "connect", deviceId });
+  }, []);
 
-  const disconnect = () => {
-    ws?.send({ type: "disconnect" });
+  const disconnect = useCallback(() => {
+    wsRef.current?.send({ type: "disconnect" });
     setConnected(false);
     setActiveDevice(null);
-  };
+  }, []);
 
-  const refreshDevices = () => {
-    ws?.send({ type: "listDevices" });
-  };
+  const refreshDevices = useCallback(() => {
+    wsRef.current?.send({ type: "listDevices" });
+  }, []);
+
+  const handleFilterChange = useCallback((filter: Filter) => {
+    wsRef.current?.send({ type: "updateFilter", filter });
+  }, []);
+
+  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+    setAutoScroll(atBottom);
+  }, []);
+
+  const clearLogs = useCallback(() => {
+    setLines([]);
+  }, []);
+
+  const COL_HEADERS = [
+    { label: "TIME", width: "7.5rem" },
+    { label: "PID", width: "4.5rem", align: "right" as const },
+    { label: "LVL", width: "1.6rem" },
+    { label: "TAG", width: "12rem" },
+    { label: "MESSAGE", flex: 1 },
+  ];
 
   return (
-    <div class="flex flex-col h-screen bg-gray-950 text-gray-100">
-      {/* Header */}
-      <header class="flex items-center justify-between px-4 py-2 bg-gray-900 border-b border-gray-800">
-        <h1 class="text-sm font-bold tracking-wide">lazylogcat</h1>
-        <div class="flex items-center gap-3 text-xs">
-          <span class={wsConnected() ? "text-green-400" : "text-red-400"}>
-            {wsConnected() ? "WS connected" : "WS disconnected"}
-          </span>
-          {connected() && (
-            <span class="text-blue-400">Device: {activeDevice()}</span>
-          )}
-        </div>
-      </header>
+    <Box display="flex" flexDirection="column" height="100vh" overflow="hidden">
+      <DeviceBar
+        devices={devices}
+        activeDevice={activeDevice}
+        connected={connected}
+        wsConnected={wsConnected}
+        onConnect={connectToDevice}
+        onDisconnect={disconnect}
+        onRefresh={refreshDevices}
+      />
 
-      {/* Controls */}
-      <div class="flex items-center gap-2 px-4 py-2 bg-gray-900/50 border-b border-gray-800">
-        <button
-          class="px-3 py-1 text-xs bg-gray-800 hover:bg-gray-700 rounded border border-gray-700"
-          onClick={refreshDevices}
-        >
-          Refresh Devices
-        </button>
-        <For each={devices()}>
-          {(device) => (
-            <button
-              class={`px-3 py-1 text-xs rounded border ${
-                activeDevice() === device.id
-                  ? "bg-blue-600 border-blue-500 text-white"
-                  : "bg-gray-800 hover:bg-gray-700 border-gray-700"
-              }`}
-              onClick={() => connectToDevice(device.id)}
-            >
-              {device.name} ({device.id})
-            </button>
-          )}
-        </For>
-        {connected() && (
-          <button
-            class="px-3 py-1 text-xs bg-red-900 hover:bg-red-800 rounded border border-red-700"
-            onClick={disconnect}
-          >
-            Disconnect
-          </button>
-        )}
-      </div>
+      <FilterBar onFilterChange={handleFilterChange} disabled={!connected} />
 
-      {/* Error banner */}
-      {error() && (
-        <div class="px-4 py-1 text-xs bg-red-900/50 text-red-300 border-b border-red-800">
-          {error()}
-        </div>
+      {error && (
+        <Alert severity="error" onClose={() => setError(null)}>
+          {error}
+        </Alert>
       )}
 
-      {/* Log output */}
-      <pre
-        ref={logContainer}
-        class="flex-1 overflow-auto px-4 py-2 text-xs font-mono leading-tight"
-      >
-        <For each={lines()}>
-          {(line) => <div class="hover:bg-gray-900/50">{line.raw}</div>}
-        </For>
-      </pre>
+      {lines.length === 0 && (
+        <Box
+          flex={1}
+          display="flex"
+          flexDirection="column"
+          alignItems="center"
+          justifyContent="center"
+          gap={1}
+        >
+          {connected ? (
+            <>
+              <RadioButtonChecked color="disabled" />
+              <Typography variant="body2" color="text.secondary">
+                waiting for logs
+              </Typography>
+              <Typography variant="caption" color="text.disabled">
+                connected — logs will appear shortly
+              </Typography>
+            </>
+          ) : (
+            <>
+              <FiberManualRecord color="disabled" />
+              <Typography variant="body2" color="text.secondary">
+                no device connected
+              </Typography>
+              <Typography variant="caption" color="text.disabled">
+                {devices.length > 0
+                  ? "select a device above to start streaming"
+                  : "connect an Android device via ADB"}
+              </Typography>
+            </>
+          )}
+        </Box>
+      )}
 
-      {/* Status bar */}
-      <footer class="px-4 py-1 text-xs bg-gray-900 border-t border-gray-800 text-gray-500">
-        {lines().length} lines
-      </footer>
-    </div>
+      {lines.length > 0 && (
+        <Box
+          ref={logContainerRef}
+          onScroll={handleScroll}
+          flex={1}
+          overflow="auto"
+          fontFamily="monospace"
+          py={0.5}
+        >
+          {/* Sticky column header */}
+          <Box
+            display="flex"
+            alignItems="center"
+            pl={1}
+            pr={1}
+            pb={0.5}
+            position="sticky"
+            top={0}
+            zIndex={1}
+            bgcolor="background.default"
+            borderBottom={1}
+            borderColor="divider"
+            height={COL_HEADER_HEIGHT}
+          >
+            {COL_HEADERS.map((col) => (
+              <Typography
+                key={col.label}
+                variant="caption"
+                color="text.disabled"
+                sx={{
+                  width: col.flex ? undefined : col.width,
+                  flex: col.flex,
+                  textAlign: col.align ?? "left",
+                  pr: 1,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                }}
+              >
+                {col.label}
+              </Typography>
+            ))}
+          </Box>
+
+          {/* Virtual list container */}
+          <div
+            style={{
+              height: virtualizer.getTotalSize(),
+              width: "100%",
+              position: "relative",
+            }}
+          >
+            {virtualizer.getVirtualItems().map((virtualRow) => (
+              <div
+                key={virtualRow.index}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+              >
+                <LogRow line={lines[virtualRow.index]} />
+              </div>
+            ))}
+          </div>
+        </Box>
+      )}
+
+      <StatusBar
+        lineCount={lines.length}
+        activeDevice={activeDevice}
+        connected={connected}
+        autoScroll={autoScroll}
+        onToggleAutoScroll={() => setAutoScroll((v) => !v)}
+        onClear={clearLogs}
+      />
+    </Box>
   );
 }

@@ -11,23 +11,49 @@ import (
 
 const defaultBufferCapacity = 10000
 
+// LogReader abstracts logcat reading so real and demo implementations
+// can be swapped transparently. *util.LogcatReader satisfies this
+// interface without changes.
+type LogReader interface {
+	Connect(deviceID string, filter model.Filter) error
+	Disconnect()
+	UpdateFilter(filter model.Filter)
+	UpdatePIDSet(pidSet map[string]struct{})
+	Drain() []model.LogLine
+	IsConnected() bool
+	Err() error
+	WaitForDone()
+}
+
 // Session holds per-WebSocket connection state: a logcat reader, a ring
 // buffer for replay, and the current filter. Each browser tab gets its
 // own Session.
 type Session struct {
-	reader *util.LogcatReader
+	reader LogReader
 	buffer *util.RingBuffer
 	filter model.Filter
 	config config.Config
+	demo   bool
 	mu     sync.Mutex
 }
 
-// NewSession creates a session with the given config.
+// NewSession creates a session backed by a real LogcatReader.
 func NewSession(cfg config.Config) *Session {
 	return &Session{
 		reader: util.NewLogcatReader(),
 		buffer: util.NewRingBuffer(defaultBufferCapacity),
 		config: cfg,
+	}
+}
+
+// NewDemoSession creates a session backed by a DemoReader that generates
+// synthetic log lines without requiring adb.
+func NewDemoSession(cfg config.Config) *Session {
+	return &Session{
+		reader: newDemoReader(),
+		buffer: util.NewRingBuffer(defaultBufferCapacity),
+		config: cfg,
+		demo:   true,
 	}
 }
 
@@ -49,8 +75,8 @@ func (s *Session) Connect(deviceID string, filter model.Filter) error {
 		return err
 	}
 
-	// If package name filter is active, resolve PIDs
-	if !filter.PackageName.IsEmpty() {
+	// If package name filter is active, resolve PIDs (skip in demo mode)
+	if !s.demo && !filter.PackageName.IsEmpty() {
 		processes, err := util.GetProcessList(deviceID)
 		if err != nil {
 			slog.Warn("Failed to get process list for PID resolution", "error", err)

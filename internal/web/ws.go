@@ -10,6 +10,7 @@ import (
 	"nhooyr.io/websocket/wsjson"
 
 	"github.com/parfenovvs/lazylogcat/internal/config"
+	"github.com/parfenovvs/lazylogcat/internal/model"
 	"github.com/parfenovvs/lazylogcat/internal/util"
 )
 
@@ -19,7 +20,7 @@ const (
 
 // handleWebSocket upgrades the HTTP connection to a WebSocket and manages
 // the per-connection session lifecycle.
-func handleWebSocket(cfg config.Config) http.HandlerFunc {
+func handleWebSocket(cfg config.Config, demo bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 			// Allow any origin during development; tighten for production.
@@ -32,16 +33,21 @@ func handleWebSocket(cfg config.Config) http.HandlerFunc {
 		defer conn.CloseNow()
 
 		ctx := r.Context()
-		session := NewSession(cfg)
+		var session *Session
+		if demo {
+			session = NewDemoSession(cfg)
+		} else {
+			session = NewSession(cfg)
+		}
 		defer session.Close()
 
-		slog.Debug("WebSocket connection established")
+		slog.Debug("WebSocket connection established", "demo", demo)
 
 		// Start read loop in a goroutine — it dispatches client commands.
 		readCtx, readCancel := context.WithCancel(ctx)
 		defer readCancel()
 
-		go wsReadLoop(readCtx, conn, session)
+		go wsReadLoop(readCtx, conn, session, demo)
 
 		// Write loop: drain session every drainInterval and send batches.
 		wsWriteLoop(ctx, conn, session)
@@ -49,7 +55,7 @@ func handleWebSocket(cfg config.Config) http.HandlerFunc {
 }
 
 // wsReadLoop reads client messages and dispatches them to the session.
-func wsReadLoop(ctx context.Context, conn *websocket.Conn, session *Session) {
+func wsReadLoop(ctx context.Context, conn *websocket.Conn, session *Session, demo bool) {
 	for {
 		_, data, err := conn.Read(ctx)
 		if err != nil {
@@ -94,6 +100,10 @@ func wsReadLoop(ctx context.Context, conn *websocket.Conn, session *Session) {
 			session.UpdateFilter(cmd.Filter)
 
 		case "listDevices":
+			if demo {
+				writeJSON(ctx, conn, newDevicesMsg([]model.Device{demoDevice}))
+				continue
+			}
 			devices, err := util.GetConnectedDevices()
 			if err != nil {
 				slog.Error("Failed to get devices", "error", err)

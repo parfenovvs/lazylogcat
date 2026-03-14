@@ -16,7 +16,10 @@ import (
 	"github.com/parfenovvs/lazylogcat/internal/web"
 )
 
-var portFlag int
+var (
+	portFlag int
+	demoFlag bool
+)
 
 var webCmd = &cobra.Command{
 	Use:          "web",
@@ -29,8 +32,11 @@ var webCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Fprintln(os.Stderr, "WARNING: The web experience is experimental and may change or break without notice.")
 
-		if err := app.PreLaunchChecks(); err != nil {
-			return err
+		// Skip adb check in demo mode
+		if !demoFlag {
+			if err := app.PreLaunchChecks(); err != nil {
+				return err
+			}
 		}
 
 		c, err := config.Resolve()
@@ -48,9 +54,9 @@ var webCmd = &cobra.Command{
 			c.Filter.Txt = config.TextFilter{Value: textFlag}
 		}
 
-		slog.Debug("Configuration loaded", "config", c.String())
+		slog.Debug("Configuration loaded", "config", c.String(), "demo", demoFlag)
 
-		srv, err := web.NewServer(portFlag, c)
+		srv, err := web.NewServer(portFlag, c, demoFlag)
 		if err != nil {
 			return fmt.Errorf("failed to create server: %w", err)
 		}
@@ -90,6 +96,7 @@ var webCmd = &cobra.Command{
 
 func init() {
 	webCmd.Flags().IntVar(&portFlag, "port", 8321, "Port to listen on")
+	webCmd.Flags().BoolVar(&demoFlag, "demo", false, "Run with a fake device and synthetic log lines (no adb required)")
 	webCmd.Flags().StringVar(&pkgFlag, "pkg", "", "Filter by package name (contains match, overrides config)")
 	webCmd.Flags().StringVar(&tagFlag, "tag", "", "Filter by log tag (contains match, overrides config)")
 	webCmd.Flags().StringVar(&textFlag, "text", "", "Filter by log text (contains match, overrides config)")

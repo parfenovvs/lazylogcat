@@ -52,15 +52,15 @@ Uses the **Elm Architecture** (Model-View-Update) via Bubble Tea. `MainModel` is
 ├── internal/
 │   ├── app/            # App lifecycle (pre-launch checks, debug logging setup)
 │   ├── config/         # Configuration (layered: defaults -> global -> project -> local)
-│   ├── model/          # Data models (Device, Filter, LogLine, Command, OutputPrefs, Size)
+│   ├── model/          # Data models (Device, Filter, LogLine, Command, CommandData, CommandGroup, OutputPrefs, Columns, Size, Level, TextFilter, TextFilterMode)
 │   ├── tui/            # Shared UI types, messages (msg.go), overlay utils, toast
 │   │   ├── commandui/ # Command palette: dialogs, single/multi select, text input
 │   │   ├── logcatui/  # Log streaming view with visual mode and search
 │   │   ├── mainui/    # Root model, state machine coordinating views
 │   │   └── theme/     # ANSI-16 color palette and style constructors
-│   ├── util/           # ADB wrapper, logcat reader, ring buffer, clipboard
+│   ├── util/           # ADB wrapper, logcat parser, logcat reader, ring buffer, clipboard, editor, config-to-model mappers
 │   └── web/            # HTTP + WebSocket server (experimental web UI backend)
-├── web-ui/              # SolidJS frontend source (built output embedded into binary)
+├── web-ui/              # React frontend source (built output embedded into binary)
 ├── config.schema.json   # JSON Schema for config files
 └── main.go              # Entry point -> cmd.Execute()
 ```
@@ -74,6 +74,7 @@ Uses the **Elm Architecture** (Model-View-Update) via Bubble Tea. `MainModel` is
 ```
 lazylogcat web [flags]
   --port int     Port to listen on (default 8321)
+  --demo         Run with a fake device and synthetic log lines (no adb required)
   --pkg string   Filter by package name (contains match, overrides config)
   --tag string   Filter by log tag (contains match, overrides config)
   --text string  Filter by log text (contains match, overrides config)
@@ -101,16 +102,18 @@ Each WebSocket connection gets its own `Session` with a `LogcatReader` and a 10,
 
 ### Frontend Stack
 
-- **Framework:** SolidJS v1.9.5 + TypeScript
+- **Framework:** React v19 + TypeScript
 - **Build tool:** Vite v6 via `bun`
-- **Styling:** Tailwind CSS v4
+- **Styling:** Emotion (`@emotion/react`, `@emotion/styled`)
 - **Output:** `internal/web/static/` — embedded into the Go binary via `//go:embed static/*`
+- **UI primitives:** MUI v7 (`@mui/material`, `@mui/icons-material`)
+- **Virtualization:** `@tanstack/react-virtual` v3 — windowed log list
 - **Dev proxy:** Vite dev server (`bun run dev`) proxies `/api` and `/ws` to `localhost:8321`
 
 ### Key Types (`internal/web`)
 
 - **`LogcatReader`** (`internal/util/logcat_reader.go`) — per-session struct replacing old global ADB state. Methods: `Connect()`, `Disconnect()`, `Drain()`, `UpdateFilter()`, `UpdatePIDSet()`, `WaitForDone()`, `IsConnected()`, `Err()`.
-- **`RingBuffer[T]`** (`internal/util/buffer.go`) — generic thread-safe ring buffer with O(1) append. Methods: `Append()`, `Recent(n)`, `All()`, `Size()`, `Clear()`.
+- **`RingBuffer`** (`internal/util/buffer.go`) — thread-safe ring buffer (hardcoded to `model.LogLine`) with O(1) append. Methods: `Append()`, `Recent(n)`, `All()`, `Size()`, `Clear()`.
 - **`OutputPrefs`** (`internal/model/output_prefs.go`) — controls rendering column visibility and soft-wrap for the web output format.
 - **`Size`** (`internal/model/terminal.go`) — terminal/viewport dimensions (`Width`, `Height int`).
 
@@ -217,7 +220,7 @@ for _, tt := range tests {
 
 - **Go version**: 1.24+
 - **Main branch**: `trunk`
-- **CI**: GitHub Actions runs `go test -v -race -coverprofile=coverage.out ./...`
+- **CI**: GitHub Actions runs `go test -v -race -coverprofile=coverage.out -covermode=atomic ./...`
 - **Commits**: [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`)
 - **Debug logs**: `.lazylogcat.log` (gitignored)
 - **Config**: Layered discovery -- `~/.config/lazylogcat/config.json` -> `.lazylogcat/config.json` -> `.lazylogcat/config.local.json`

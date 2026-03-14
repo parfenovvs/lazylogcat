@@ -19,16 +19,18 @@ type Server struct {
 	port       int
 }
 
-// NewServer creates a new web server bound to the given port.
-func NewServer(port int, cfg config.Config) (*Server, error) {
+// NewServer creates a new web server bound to the given port. When demo
+// is true, the server returns a fake device and generates synthetic log
+// lines instead of requiring adb.
+func NewServer(port int, cfg config.Config, demo bool) (*Server, error) {
 	mux := http.NewServeMux()
 
 	// REST endpoints
-	mux.HandleFunc("GET /api/devices", handleDevices)
+	mux.HandleFunc("GET /api/devices", handleDevices(demo))
 	mux.HandleFunc("GET /api/config", handleConfig(cfg))
 
 	// WebSocket
-	mux.HandleFunc("GET /ws", handleWebSocket(cfg))
+	mux.HandleFunc("GET /ws", handleWebSocket(cfg, demo))
 
 	// Static files from embedded FS
 	staticSub, err := fs.Sub(staticFS, "static")
