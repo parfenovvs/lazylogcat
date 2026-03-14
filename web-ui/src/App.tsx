@@ -30,6 +30,7 @@ export default function App() {
   const wsRef = useRef<LogcatWebSocket | null>(null);
   const logContainerRef = useRef<HTMLDivElement>(null);
   const autoScrollRef = useRef(true);
+  const filterRef = useRef<Filter>({});
 
   useEffect(() => {
     autoScrollRef.current = autoScroll;
@@ -69,6 +70,9 @@ export default function App() {
       case "devices":
         setDevices(msg.data);
         break;
+      case "clearLines":
+        setLines([]);
+        break;
       case "error":
         setError(msg.message);
         break;
@@ -95,7 +99,7 @@ export default function App() {
   const connectToDevice = useCallback((deviceId: string) => {
     setLines([]);
     setError(null);
-    wsRef.current?.send({ type: "connect", deviceId });
+    wsRef.current?.send({ type: "connect", deviceId, filter: filterRef.current });
   }, []);
 
   const disconnect = useCallback(() => {
@@ -109,6 +113,7 @@ export default function App() {
   }, []);
 
   const handleFilterChange = useCallback((filter: Filter) => {
+    filterRef.current = filter;
     wsRef.current?.send({ type: "updateFilter", filter });
   }, []);
 
@@ -192,7 +197,7 @@ export default function App() {
           flex={1}
           overflow="auto"
           fontFamily="monospace"
-          py={0.5}
+          pb={0.5}
         >
           {/* Sticky column header */}
           <Box

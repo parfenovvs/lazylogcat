@@ -106,6 +106,13 @@ func (s *Session) Drain() []model.LogLine {
 	return lines
 }
 
+// ClearBuffer empties the ring buffer of previously collected lines.
+func (s *Session) ClearBuffer() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.buffer.Clear()
+}
+
 // UpdateFilter hot-swaps the filter on the running reader.
 func (s *Session) UpdateFilter(filter model.Filter) {
 	s.mu.Lock()

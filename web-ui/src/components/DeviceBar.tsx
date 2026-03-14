@@ -1,5 +1,3 @@
-import AppBar from "@mui/material/AppBar";
-import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
 import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import ToggleButton from "@mui/material/ToggleButton";
@@ -39,58 +37,56 @@ export default function DeviceBar({
   };
 
   return (
-    <AppBar position="static" color="default" elevation={1}>
-      <Toolbar variant="dense">
-        <Typography variant="subtitle2" fontFamily="monospace" noWrap sx={{ mr: 2 }}>
-          lazylogcat
-        </Typography>
+    <Box display="flex" alignItems="center" gap={1} px={1} py={0.5} borderBottom={1} borderColor="divider">
+      <Typography variant="subtitle2" fontFamily="monospace" noWrap sx={{ mr: 1 }}>
+        lazylogcat
+      </Typography>
 
-        <Chip
-          size="small"
-          label={wsConnected ? "live" : "offline"}
-          color={wsConnected ? "success" : "error"}
-          variant="outlined"
-        />
+      <Chip
+        size="small"
+        label={wsConnected ? "live" : "offline"}
+        color={wsConnected ? "success" : "error"}
+        variant="outlined"
+      />
 
-        <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
+      <Divider orientation="vertical" flexItem />
 
-        {devices.length > 0 ? (
-          <Box display="flex" alignItems="center" gap={0.5} flex={1} overflow="hidden">
-            <ToggleButtonGroup
-              value={activeDevice ?? ""}
-              exclusive
-              onChange={handleChange}
-              size="small"
-            >
-              {devices.map((device) => (
-                <ToggleButton key={device.id} value={device.id}>
-                  {device.name || device.id}
-                </ToggleButton>
-              ))}
-            </ToggleButtonGroup>
+      {devices.length > 0 ? (
+        <Box display="flex" alignItems="center" gap={0.5} flex={1} overflow="hidden">
+          <ToggleButtonGroup
+            value={activeDevice ?? ""}
+            exclusive
+            onChange={handleChange}
+            size="small"
+          >
+            {devices.map((device) => (
+              <ToggleButton key={device.id} value={device.id}>
+                {device.name || device.id}
+              </ToggleButton>
+            ))}
+          </ToggleButtonGroup>
 
-            {activeDevice && connected && (
-              <IconButton size="small" onClick={onDisconnect} title="Disconnect">
-                <CloseIcon fontSize="small" />
-              </IconButton>
-            )}
-          </Box>
-        ) : (
-          <Box flex={1}>
-            <Typography variant="body2" color="text.disabled">
-              no devices
-            </Typography>
-          </Box>
-        )}
+          {activeDevice && connected && (
+            <IconButton size="small" onClick={onDisconnect} title="Disconnect">
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          )}
+        </Box>
+      ) : (
+        <Box flex={1}>
+          <Typography variant="body2" color="text.disabled">
+            no devices
+          </Typography>
+        </Box>
+      )}
 
-        <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
+      <Divider orientation="vertical" flexItem />
 
-        <ThemeSwitcher />
+      <ThemeSwitcher />
 
-        <IconButton onClick={onRefresh} title="Refresh device list" size="small">
-          <RefreshIcon fontSize="small" />
-        </IconButton>
-      </Toolbar>
-    </AppBar>
+      <IconButton onClick={onRefresh} title="Refresh device list" size="small">
+        <RefreshIcon fontSize="small" />
+      </IconButton>
+    </Box>
   );
 }

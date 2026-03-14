@@ -61,12 +61,17 @@ export interface ErrorMessage {
   message: string;
 }
 
+export interface ClearLinesMessage {
+  type: "clearLines";
+}
+
 export type ServerMessage =
   | LinesMessage
   | ConnectedMessage
   | DisconnectedMessage
   | DevicesMessage
-  | ErrorMessage;
+  | ErrorMessage
+  | ClearLinesMessage;
 
 // Client -> Server messages
 

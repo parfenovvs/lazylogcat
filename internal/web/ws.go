@@ -98,6 +98,8 @@ func wsReadLoop(ctx context.Context, conn *websocket.Conn, session *Session, dem
 		case "updateFilter":
 			cmd := payload.(updateFilterCmd)
 			session.UpdateFilter(cmd.Filter)
+			session.ClearBuffer()
+			writeJSON(ctx, conn, newClearLinesMsg())
 
 		case "listDevices":
 			if demo {

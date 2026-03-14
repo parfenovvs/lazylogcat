@@ -46,6 +46,10 @@ func newErrorMsg(message string) serverMsg {
 	return serverMsg{Type: "error", Data: errorPayload{Message: message}}
 }
 
+func newClearLinesMsg() serverMsg {
+	return serverMsg{Type: "clearLines"}
+}
+
 // --- Client -> Server messages ---
 
 type connectCmd struct {
