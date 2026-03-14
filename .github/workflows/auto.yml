@@ -31,8 +31,7 @@ jobs:
         run: bun install
 
       - name: Build frontend
-        working-directory: web-ui
-        run: bun run build
+        run: go generate ./internal/web/...
 
       - name: Download dependencies
         run: go mod download

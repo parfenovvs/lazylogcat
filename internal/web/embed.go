@@ -2,7 +2,7 @@ package web
 
 import "embed"
 
-//go:generate bun --cwd ../../web-ui run build
+//go:generate bun run --cwd ../../web-ui build
 
 //go:embed static/*
 var staticFS embed.FS

@@ -32,10 +32,9 @@ go mod verify      # Verify deps
 ### Frontend (web-ui) — requires `bun`
 
 ```bash
-(cd web-ui && bun install)        # Install JS dependencies
-bun --cwd web-ui run dev          # Dev server with HMR (proxies /api, /ws to :8321)
-bun --cwd web-ui run build        # Build into internal/web/static/ (embedded into binary)
-go generate ./internal/web/...    # Same as above, via go generate
+(cd web-ui && bun install)        # Install JS dependencies (one-time setup)
+go generate ./internal/web/...    # Build frontend into internal/web/static/
+bun run --cwd web-ui dev          # Dev server with HMR (proxies /api, /ws to :8321)
 ```
 
 ## Architecture
