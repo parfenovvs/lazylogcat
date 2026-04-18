@@ -18,13 +18,20 @@ Thank you for your interest in contributing!
    go fmt ./...
    go vet ./...
    ```
-5. Commit using [Conventional Commits](https://www.conventionalcommits.org/) format:
+5. **Match CI** (recommended before opening a PR): the workflow also builds the embedded web UI. From the repo root:
+   ```bash
+   (cd web-ui && bun install)
+   go generate ./internal/web/...
+   go build -v ./...
+   go test -v -race ./...
+   ```
+6. Commit using [Conventional Commits](https://www.conventionalcommits.org/) format:
    ```
    feat: add device selection screen
    fix: handle empty logcat buffer
    docs: update installation instructions
    ```
-6. Push and open a PR against `trunk`
+7. Push and open a PR against `trunk`
 
 ## Code Style
 

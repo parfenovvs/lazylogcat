@@ -1,6 +1,6 @@
 # Agent Guidelines for lazylogcat
 
-TUI application for viewing Android logcat logs, built with Go 1.24+ and Bubble Tea. Requires `adb` in PATH.
+TUI application for viewing Android logcat logs, built with Go 1.25+ and Bubble Tea v2. Requires `adb` in PATH.
 
 ## Build, Test & Run
 
@@ -96,7 +96,7 @@ Starts an HTTP server, opens the browser automatically, and waits for SIGINT/SIG
 
 Client→server message types: `connect`, `disconnect`, `updateFilter`, `listDevices`
 
-Server→client message types: `lines`, `connected`, `disconnected`, `devices`, `error`
+Server→client message types: `lines`, `connected`, `disconnected`, `devices`, `error`, `clearLines` (sent after `updateFilter` so the client can drop buffered lines)
 
 Each WebSocket connection gets its own `Session` with a `LogcatReader` and a 10,000-line `RingBuffer`. Log lines are drained every 50ms and sent in batches.
 
@@ -128,8 +128,9 @@ import (
     "fmt"
     "log/slog"
 
-    tea "github.com/charmbracelet/bubbletea"
-    "github.com/charmbracelet/lipgloss"
+    "charm.land/bubbles/v2/viewport"
+    tea "charm.land/bubbletea/v2"
+    "charm.land/lipgloss/v2"
 
     "github.com/parfenovvs/lazylogcat/internal/model"
     "github.com/parfenovvs/lazylogcat/internal/tui"
@@ -218,9 +219,9 @@ for _, tt := range tests {
 
 ## Important Notes
 
-- **Go version**: 1.24+
+- **Go version**: 1.25+ (see `go.mod`)
 - **Main branch**: `trunk`
-- **CI**: GitHub Actions runs `go test -v -race -coverprofile=coverage.out -covermode=atomic ./...`
+- **CI**: GitHub Actions (`.github/workflows/auto.yml`) runs `bun install` in `web-ui`, `go generate ./internal/web/...`, `go build ./...`, then `go test -v -race -coverprofile=coverage.out -covermode=atomic ./...`
 - **Commits**: [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`)
 - **Debug logs**: `.lazylogcat.log` (gitignored)
 - **Config**: Layered discovery -- `~/.config/lazylogcat/config.json` -> `.lazylogcat/config.json` -> `.lazylogcat/config.local.json`
@@ -229,9 +230,9 @@ for _, tt := range tests {
 
 | Package | Purpose |
 |---------|---------|
-| bubbletea v1.3.10 | TUI framework |
-| bubbles v0.21.0 | TUI components (viewport, textinput) |
-| lipgloss v1.1.0 | Terminal styling |
+| charm.land/bubbletea/v2 v2.0.6 | TUI framework |
+| charm.land/bubbles/v2 v2.1.0 | TUI components (viewport, textinput, table) |
+| charm.land/lipgloss/v2 v2.0.3 | Terminal styling |
 | cobra v1.10.2 | CLI framework |
 | clipboard v0.1.4 | Cross-platform clipboard |
 | pkg/browser | Auto-open browser for `lazylogcat web` |

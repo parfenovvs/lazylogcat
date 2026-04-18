@@ -1,7 +1,7 @@
 # lazylogcat
 
 [![Build Status](https://github.com/parfenovvs/lazylogcat/actions/workflows/auto.yml/badge.svg?branch=trunk)](https://github.com/parfenovvs/lazylogcat/actions/workflows/auto.yml)
-[![Go Version](https://img.shields.io/badge/go-%3E%3D1.24-00ADD8?logo=go)](https://go.dev/)
+[![Go Version](https://img.shields.io/badge/go-%3E%3D1.25-00ADD8?logo=go)](https://go.dev/)
 [![Release](https://img.shields.io/github/v/release/parfenovvs/lazylogcat)](https://github.com/parfenovvs/lazylogcat/releases/latest)
 [![Go Report Card](https://goreportcard.com/badge/github.com/parfenovvs/lazylogcat)](https://goreportcard.com/report/github.com/parfenovvs/lazylogcat)
 
@@ -81,11 +81,11 @@ Each layer overrides the previous. All fields are optional. See the [JSON Schema
 
 ## Acknowledgments
 
-This project wouldn't exist without these incredible open source projects:
+This project wouldn't exist without these open source projects. The TUI stack uses **Bubble Tea v2** and related libraries published on `charm.land` (successors to the original [Charm](https://github.com/charmbracelet) GitHub modules):
 
-- **[Bubble Tea](https://github.com/charmbracelet/bubbletea)** by Charm
-- **[Bubbles](https://github.com/charmbracelet/bubbles)** by Charm
-- **[Lip Gloss](https://github.com/charmbracelet/lipgloss)** by Charm
+- **[Bubble Tea](https://pkg.go.dev/charm.land/bubbletea/v2)** (`charm.land/bubbletea/v2`)
+- **[Bubbles](https://pkg.go.dev/charm.land/bubbles/v2)** (`charm.land/bubbles/v2`)
+- **[Lip Gloss](https://pkg.go.dev/charm.land/lipgloss/v2)** (`charm.land/lipgloss/v2`)
 - **[Cobra](https://github.com/spf13/cobra)** by spf13
 - **[clipboard](https://github.com/atotto/clipboard)** by atotto
 
