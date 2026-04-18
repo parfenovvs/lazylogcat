@@ -718,9 +718,9 @@ func TestResolve(t *testing.T) {
 		}
 		defer os.Chdir(origDir)
 
-		got, err := Resolve()
+		got, err := Resolve(nil)
 		if err != nil {
-			t.Errorf("Resolve() error = %v, want nil", err)
+			t.Errorf("Resolve(nil) error = %v, want nil", err)
 		}
 
 		compareConfigs(t, got, DefaultConfig())
@@ -738,9 +738,9 @@ func TestResolve(t *testing.T) {
 			"filter": {"package_name": "com.project"}
 		}`)
 
-		got, err := Resolve()
+		got, err := Resolve(nil)
 		if err != nil {
-			t.Errorf("Resolve() error = %v, want nil", err)
+			t.Errorf("Resolve(nil) error = %v, want nil", err)
 		}
 
 		want := DefaultConfig()
@@ -765,9 +765,9 @@ func TestResolve(t *testing.T) {
 			"filter": {"package_name": "com.local"}
 		}`)
 
-		got, err := Resolve()
+		got, err := Resolve(nil)
 		if err != nil {
-			t.Errorf("Resolve() error = %v, want nil", err)
+			t.Errorf("Resolve(nil) error = %v, want nil", err)
 		}
 
 		want := DefaultConfig()
@@ -792,9 +792,9 @@ func TestResolve(t *testing.T) {
 			"filter": {"package_name": "com.local"}
 		}`)
 
-		got, err := Resolve()
+		got, err := Resolve(nil)
 		if err == nil {
-			t.Error("Resolve() error = nil, want error for invalid file")
+			t.Error("Resolve(nil) error = nil, want error for invalid file")
 		}
 
 		// Local config should still be applied over defaults
@@ -828,9 +828,9 @@ func TestResolve(t *testing.T) {
 			"filter": {"log_tag": "LocalTag"}
 		}`)
 
-		got, err := Resolve()
+		got, err := Resolve(nil)
 		if err != nil {
-			t.Errorf("Resolve() error = %v, want nil", err)
+			t.Errorf("Resolve(nil) error = %v, want nil", err)
 		}
 
 		want := DefaultConfig()
@@ -861,9 +861,9 @@ func TestResolve(t *testing.T) {
 			}
 		}`)
 
-		got, err := Resolve()
+		got, err := Resolve(nil)
 		if err != nil {
-			t.Errorf("Resolve() error = %v, want nil", err)
+			t.Errorf("Resolve(nil) error = %v, want nil", err)
 		}
 
 		want := DefaultConfig()
@@ -889,9 +889,9 @@ func TestResolve(t *testing.T) {
 			"display": {"wrap": false, "columns": {"date": false}}
 		}`)
 
-		got, err := Resolve()
+		got, err := Resolve(nil)
 		if err != nil {
-			t.Errorf("Resolve() error = %v, want nil", err)
+			t.Errorf("Resolve(nil) error = %v, want nil", err)
 		}
 
 		want := DefaultConfig()

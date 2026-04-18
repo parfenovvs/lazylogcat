@@ -14,6 +14,9 @@ var (
 	pkgFlag  string
 	tagFlag  string
 	textFlag string
+
+	cliProjectConfig string
+	cliLocalConfig   string
 )
 
 var rootCmd = &cobra.Command{
@@ -32,7 +35,7 @@ var rootCmd = &cobra.Command{
 			return err
 		}
 
-		c, err := config.Resolve()
+		c, err := resolveAppConfig()
 		if err != nil {
 			slog.Warn("Config resolution had errors", "error", err)
 		}
@@ -57,9 +60,25 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	rootCmd.PersistentFlags().BoolVar(&debugFlag, "debug", false, "Enable debug logging to .lazylogcat.log file")
+	rootCmd.PersistentFlags().StringVar(&cliProjectConfig, "config", "", "Override path for project config (default: .lazylogcat/config.json)")
+	rootCmd.PersistentFlags().StringVar(&cliLocalConfig, "config-local", "", "Override path for local config (default: .lazylogcat/config.local.json)")
 	rootCmd.Flags().StringVar(&pkgFlag, "pkg", "", "Filter by package name (contains match, overrides config)")
 	rootCmd.Flags().StringVar(&tagFlag, "tag", "", "Filter by log tag (contains match, overrides config)")
 	rootCmd.Flags().StringVar(&textFlag, "text", "", "Filter by log text (contains match, overrides config)")
+}
+
+func configOpts() *config.ResolveOptions {
+	if cliProjectConfig == "" && cliLocalConfig == "" {
+		return nil
+	}
+	return &config.ResolveOptions{
+		ProjectConfigPath: cliProjectConfig,
+		LocalConfigPath:   cliLocalConfig,
+	}
+}
+
+func resolveAppConfig() (config.Config, error) {
+	return config.Resolve(configOpts())
 }
 
 func Execute() error {

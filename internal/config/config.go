@@ -116,19 +116,27 @@ func (c *Config) String() string {
 	return string(data)
 }
 
+// ResolveOptions overrides default paths for the project and local config layers.
+// Zero value means use the standard paths (.lazylogcat/config.json and
+// .lazylogcat/config.local.json). The global user config path is not overridden.
+type ResolveOptions struct {
+	ProjectConfigPath string
+	LocalConfigPath   string
+}
+
 // Resolve discovers and merges configuration from all layers in order:
 //  1. Default configuration
 //  2. Global user config: ~/.config/lazylogcat/config.json
-//  3. Project config: .lazylogcat/config.json
-//  4. Local override: .lazylogcat/config.local.json
+//  3. Project config: .lazylogcat/config.json (or ProjectConfigPath when set)
+//  4. Local override: .lazylogcat/config.local.json (or LocalConfigPath when set)
 //
-// Returns the merged config and any non-fatal errors encountered during loading.
-// Always returns a usable config, even if some files fail to load.
-func Resolve() (Config, error) {
+// opts may be nil. Returns the merged config and any non-fatal errors encountered
+// during loading. Always returns a usable config, even if some files fail to load.
+func Resolve(opts *ResolveOptions) (Config, error) {
 	cfg := DefaultConfig()
 	var errs []error
 
-	for _, path := range configPaths() {
+	for _, path := range configPaths(opts) {
 		overlay, err := loadFile(path)
 		if err != nil {
 			if !errors.Is(err, os.ErrNotExist) {
@@ -145,7 +153,7 @@ func Resolve() (Config, error) {
 }
 
 // configPaths returns the ordered list of config file paths to check.
-func configPaths() []string {
+func configPaths(opts *ResolveOptions) []string {
 	var paths []string
 
 	// Layer 1: Global user config (~/.config/lazylogcat/config.json)
@@ -154,10 +162,18 @@ func configPaths() []string {
 	}
 
 	// Layer 2: Project config (.lazylogcat/config.json)
-	paths = append(paths, filepath.Join(".lazylogcat", "config.json"))
+	proj := filepath.Join(".lazylogcat", "config.json")
+	if opts != nil && opts.ProjectConfigPath != "" {
+		proj = opts.ProjectConfigPath
+	}
+	paths = append(paths, proj)
 
 	// Layer 3: Local override (.lazylogcat/config.local.json)
-	paths = append(paths, filepath.Join(".lazylogcat", "config.local.json"))
+	local := filepath.Join(".lazylogcat", "config.local.json")
+	if opts != nil && opts.LocalConfigPath != "" {
+		local = opts.LocalConfigPath
+	}
+	paths = append(paths, local)
 
 	return paths
 }

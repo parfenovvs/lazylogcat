@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"runtime/debug"
 
 	"github.com/spf13/cobra"
@@ -27,15 +29,30 @@ func getVersion() string {
 	return "dev"
 }
 
+var versionJSON bool
+
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print version information",
-	Example: `  lazylogcat version`,
-	Run: func(cmd *cobra.Command, args []string) {
+	Example: `  lazylogcat version
+  lazylogcat version --json`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if versionJSON {
+			b, err := json.Marshal(struct {
+				Version string `json:"version"`
+			}{Version: getVersion()})
+			if err != nil {
+				return err
+			}
+			fmt.Fprintln(os.Stdout, string(b))
+			return nil
+		}
 		fmt.Println(getVersion())
+		return nil
 	},
 }
 
 func init() {
+	versionCmd.Flags().BoolVar(&versionJSON, "json", false, "Print version as a JSON object")
 	rootCmd.AddCommand(versionCmd)
 }

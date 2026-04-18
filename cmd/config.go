@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/parfenovvs/lazylogcat/internal/app"
-	"github.com/parfenovvs/lazylogcat/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -26,7 +25,7 @@ and local override (same rules as the TUI). Warnings about unreadable files go t
 		return app.SetupLogging(debugFlag)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := config.Resolve()
+		c, err := resolveAppConfig()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "warning: %v\n", err)
 		}

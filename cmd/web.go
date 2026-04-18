@@ -39,7 +39,7 @@ var webCmd = &cobra.Command{
 			}
 		}
 
-		c, err := config.Resolve()
+		c, err := config.Resolve(nil)
 		if err != nil {
 			slog.Warn("Config resolution had errors", "error", err)
 		}

@@ -67,7 +67,7 @@ func runLogsDump(cmd *cobra.Command, args []string) error {
 	if err := validateLogsFormat(logsFormat); err != nil {
 		return err
 	}
-	c, err := config.Resolve()
+	c, err := resolveAppConfig()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
 	}
@@ -164,7 +164,7 @@ func runLogsParse(cmd *cobra.Command, args []string) error {
 	if err := validateLogsFormat(logsFormat); err != nil {
 		return err
 	}
-	c, err := config.Resolve()
+	c, err := resolveAppConfig()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
 	}
