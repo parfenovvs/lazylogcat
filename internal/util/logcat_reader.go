@@ -281,3 +281,17 @@ func MatchesFilter(raw string, line model.LogLine, filter *model.Filter, pidSet 
 
 	return true
 }
+
+// UpdatePIDSetForPackage resolves process PIDs for a non-empty package filter via
+// adb shell ps and updates the reader. No-op if the package filter is empty.
+func UpdatePIDSetForPackage(r *LogcatReader, deviceID string, pkg model.TextFilter) {
+	if pkg.IsEmpty() {
+		return
+	}
+	processes, err := GetProcessList(deviceID)
+	if err != nil {
+		slog.Warn("Failed to get process list for PID resolution", "error", err)
+		return
+	}
+	r.UpdatePIDSet(ResolvePIDs(processes, &pkg))
+}

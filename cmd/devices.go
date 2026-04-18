@@ -46,9 +46,6 @@ var devicesCmd = &cobra.Command{
 		}
 		return nil
 	},
-	PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
-		return app.CloseLog()
-	},
 }
 
 func init() {

@@ -37,9 +37,6 @@ and local override (same rules as the TUI). Warnings about unreadable files go t
 		fmt.Println(string(data))
 		return nil
 	},
-	PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
-		return app.CloseLog()
-	},
 }
 
 func init() {
