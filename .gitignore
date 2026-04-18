@@ -1,4 +1,5 @@
-lazylogcat
+.lazylogcat/
+/lazylogcat
 
 .lazylogcat.log
 .lazylogcat/config.local.json

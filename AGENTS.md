@@ -48,7 +48,9 @@ Uses the **Elm Architecture** (Model-View-Update) via Bubble Tea. `MainModel` is
 ## Project Structure
 
 ```
-├── cmd/                 # CLI commands (cobra): root.go, version.go, web.go
+├── cmd/                 # CLI commands (cobra): root.go, version.go, web.go, skill.go, …
+├── skills/              # Bundled agent skill(s), embedded into the binary (`//go:embed`)
+│   └── lazylogcat/      # SKILL.md for Cursor / Claude Code (see `lazylogcat skill install`)
 ├── internal/
 │   ├── app/            # App lifecycle (pre-launch checks, debug logging setup)
 │   ├── config/         # Configuration (layered: defaults -> global -> project -> local)
@@ -64,6 +66,17 @@ Uses the **Elm Architecture** (Model-View-Update) via Bubble Tea. `MainModel` is
 ├── config.schema.json   # JSON Schema for config files
 └── main.go              # Entry point -> cmd.Execute()
 ```
+
+## Agent skill install
+
+The repository ships an embedded **agent skill** under [skills/lazylogcat/SKILL.md](skills/lazylogcat/SKILL.md). It is bundled via [skills/embed.go](skills/embed.go) and copied to the user’s machine with:
+
+```bash
+lazylogcat skill install --agent cursor --user      # ~/.cursor/skills/lazylogcat/
+lazylogcat skill install --agent claude --project   # ./.claude/skills/lazylogcat/ (cwd matters)
+```
+
+Requires `--agent` (`cursor` or `claude`) and **exactly one** of `--user` or `--project`. Does not require `adb`. On success, prints the destination directory.
 
 ## Web UI (experimental)
 
