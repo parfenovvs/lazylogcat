@@ -30,6 +30,7 @@ func getVersion() string {
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print version information",
+	Example: `  lazylogcat version`,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println(getVersion())
 	},

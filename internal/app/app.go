@@ -21,7 +21,7 @@ var (
 func PreLaunchChecks() error {
 	_, err := exec.LookPath("adb")
 	if err != nil {
-		return ErrAdbNotFound
+		return fmt.Errorf("%w: install Android Debug Bridge (adb) and ensure it is on your PATH", ErrAdbNotFound)
 	}
 	return nil
 }
