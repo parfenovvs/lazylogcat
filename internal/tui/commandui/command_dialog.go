@@ -4,10 +4,10 @@ import (
 	"maps"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/table"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/table"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/parfenovvs/lazylogcat/internal/model"
@@ -241,7 +241,7 @@ func (m CommandDialogModel) openSubdialog(cmd model.Command) (CommandDialogModel
 
 func (m CommandDialogModel) Update(msg tea.Msg) (CommandDialogModel, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		key := msg.String()
 		if key == "ctrl+p" || key == "esc" {
 			if m.state == stateMultiSelect {
@@ -290,7 +290,7 @@ func (m CommandDialogModel) Update(msg tea.Msg) (CommandDialogModel, tea.Cmd) {
 	return m, nil
 }
 
-func (m CommandDialogModel) updateCommands(msg tea.KeyMsg, key string) (CommandDialogModel, tea.Cmd) {
+func (m CommandDialogModel) updateCommands(msg tea.KeyPressMsg, key string) (CommandDialogModel, tea.Cmd) {
 	if key == "enter" {
 		if cmdData, ok := m.commandMap[m.table.Cursor()]; ok {
 			if cmdData.Type == model.CommandTypeNavigation {

@@ -1,8 +1,8 @@
 package commandui
 
 import (
-	"github.com/charmbracelet/bubbles/table"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/table"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/parfenovvs/lazylogcat/internal/model"
 	"github.com/parfenovvs/lazylogcat/internal/tui"
@@ -44,7 +44,7 @@ func newLevelSingleSelect(currentLevel model.Level) SingleSelectModel {
 	})
 }
 
-func (m CommandDialogModel) updateLogLevel(msg tea.KeyMsg, key string) (CommandDialogModel, tea.Cmd) {
+func (m CommandDialogModel) updateLogLevel(msg tea.KeyPressMsg, key string) (CommandDialogModel, tea.Cmd) {
 	var cmd tea.Cmd
 	m.singleSelect, cmd = m.singleSelect.Update(msg, key)
 	if m.singleSelect.Selected() {

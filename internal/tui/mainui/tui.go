@@ -3,8 +3,8 @@ package mainui
 import (
 	"log/slog"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/parfenovvs/lazylogcat/internal/config"
 	"github.com/parfenovvs/lazylogcat/internal/model"
@@ -88,7 +88,7 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	)
 
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "ctrl+c":
 			logcatui.Close(&m.logcatView)
@@ -138,7 +138,7 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-func (m MainModel) View() string {
+func (m MainModel) View() tea.View {
 	style = style.Width(m.windowSize.Width).
 		Height(m.windowSize.Height)
 
@@ -149,5 +149,8 @@ func (m MainModel) View() string {
 		content = m.logcatView.View()
 	}
 
-	return style.Render(content)
+	v := tea.NewView(style.Render(content))
+	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
+	return v
 }

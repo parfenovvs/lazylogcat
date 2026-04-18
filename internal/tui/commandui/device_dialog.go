@@ -3,8 +3,8 @@ package commandui
 import (
 	"fmt"
 
-	"github.com/charmbracelet/bubbles/table"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/table"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/parfenovvs/lazylogcat/internal/model"
 	"github.com/parfenovvs/lazylogcat/internal/tui"
@@ -58,7 +58,7 @@ func loadDevices(selectedDevice *model.Device) (SingleSelectModel, []model.Devic
 	return ss, devices, nil
 }
 
-func (m CommandDialogModel) updateDevices(msg tea.KeyMsg, key string) (CommandDialogModel, tea.Cmd) {
+func (m CommandDialogModel) updateDevices(msg tea.KeyPressMsg, key string) (CommandDialogModel, tea.Cmd) {
 	if key == "r" {
 		ss, allDevices, err := loadDevices(m.selectedDevice)
 		m.singleSelect = ss

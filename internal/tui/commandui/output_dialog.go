@@ -1,8 +1,8 @@
 package commandui
 
 import (
-	"github.com/charmbracelet/bubbles/table"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/table"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/parfenovvs/lazylogcat/internal/model"
 	"github.com/parfenovvs/lazylogcat/internal/tui"
@@ -80,7 +80,7 @@ func outputPrefsFromActive(active map[string]bool) model.OutputPrefs {
 	}
 }
 
-func (m CommandDialogModel) updateMultiSelect(msg tea.KeyMsg, key string) (CommandDialogModel, tea.Cmd) {
+func (m CommandDialogModel) updateMultiSelect(msg tea.KeyPressMsg, key string) (CommandDialogModel, tea.Cmd) {
 	_ = key
 	m.multiSelect, _ = m.multiSelect.Update(msg, key)
 	return m, nil

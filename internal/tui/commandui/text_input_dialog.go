@@ -1,8 +1,8 @@
 package commandui
 
 import (
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/parfenovvs/lazylogcat/internal/model"
 )
@@ -49,7 +49,7 @@ func newCommandTextInput(cmd model.Command, current model.TextFilter, deviceId s
 	})
 }
 
-func (m CommandDialogModel) updateTextInput(msg tea.KeyMsg, key string) (CommandDialogModel, tea.Cmd) {
+func (m CommandDialogModel) updateTextInput(msg tea.KeyPressMsg, key string) (CommandDialogModel, tea.Cmd) {
 	var cmd tea.Cmd
 	m.textInputDlg, cmd = m.textInputDlg.Update(msg)
 	if m.textInputDlg.Submitted() {

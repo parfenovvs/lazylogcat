@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/parfenovvs/lazylogcat/internal/model"
@@ -156,7 +156,10 @@ func New(parentSize model.Size, device *model.Device, deviceId string, filter mo
 
 	headerHeight := lipgloss.Height(m.headerView())
 	footerHeight := lipgloss.Height(m.footerView())
-	vp := viewport.New(parentSize.Width, parentSize.Height-footerHeight-headerHeight)
+	vp := viewport.New(
+		viewport.WithWidth(parentSize.Width),
+		viewport.WithHeight(parentSize.Height-footerHeight-headerHeight),
+	)
 	m.viewport = vp
 
 	return m
@@ -182,8 +185,8 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 	case tui.MeasureCmd:
 		headerHeight := lipgloss.Height(m.headerView())
 		footerHeight := lipgloss.Height(m.footerView())
-		m.viewport.Width = m.parentSize.Width
-		m.viewport.Height = m.parentSize.Height - footerHeight - headerHeight - 1
+		m.viewport.SetWidth(m.parentSize.Width)
+		m.viewport.SetHeight(m.parentSize.Height - footerHeight - headerHeight - 1)
 		needsRender = true
 
 	case commandui.CommandDialogCloseMsg:
@@ -264,7 +267,7 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		m.Render()
 		return m, nil
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		result := m.handleKeyMsg(msg)
 		cmd = result.cmd
 		needsRender = result.needsRender
@@ -373,7 +376,7 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 							rendered := softWrapIndent(
 								oldest[i].ModifiedString(cols),
 								oldest[i].PrefixWidth(cols),
-								m.viewport.Width,
+								m.viewport.Width(),
 							)
 							yOffsetAdjust += lipgloss.Height(rendered)
 						} else {
@@ -408,7 +411,7 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 	} else if yOffsetAdjust > 0 {
 		// Compensate for lines evicted from the top of the ring buffer
 		// so that the viewport stays pinned to the same content.
-		newOffset := m.viewport.YOffset - yOffsetAdjust
+		newOffset := m.viewport.YOffset() - yOffsetAdjust
 		if newOffset < 0 {
 			newOffset = 0
 		}
@@ -486,14 +489,14 @@ func (m *LogcatViewModel) Render() {
 			if selected {
 				var content string
 				if m.outputPrefs.SoftWrap {
-					content = softWrapIndent(line, logLine.PrefixWidth(cols), m.viewport.Width)
+					content = softWrapIndent(line, logLine.PrefixWidth(cols), m.viewport.Width())
 				} else {
 					content = line
 				}
 				styled := lipgloss.NewStyle().
 					Background(theme.ColorVisualBG).
 					Foreground(theme.ColorVisualFG).
-					Width(m.viewport.Width).
+					Width(m.viewport.Width()).
 					Render(content)
 				b.WriteString(styled)
 				b.WriteString("\n")
@@ -502,13 +505,13 @@ func (m *LogcatViewModel) Render() {
 		}
 		var content string
 		if m.outputPrefs.SoftWrap {
-			content = softWrapIndent(line, logLine.PrefixWidth(cols), m.viewport.Width)
+			content = softWrapIndent(line, logLine.PrefixWidth(cols), m.viewport.Width())
 		} else {
 			content = line
 		}
 
 		levelColor := theme.GetLogColor(logLine.Level)
-		if m.outputPrefs.Color && levelColor != "" {
+		if m.outputPrefs.Color && !theme.IsDefaultForeground(levelColor) {
 			b.WriteString(lipgloss.NewStyle().Foreground(levelColor).Render(content))
 		} else {
 			b.WriteString(content)
@@ -519,7 +522,7 @@ func (m *LogcatViewModel) Render() {
 }
 
 // handleKeyMsg routes key messages to appropriate handlers based on mode
-func (m *LogcatViewModel) handleKeyMsg(msg tea.KeyMsg) updateResult {
+func (m *LogcatViewModel) handleKeyMsg(msg tea.KeyPressMsg) updateResult {
 	key := msg.String()
 
 	// When command dialog is open, delegate all keys to the dialog
@@ -755,16 +758,16 @@ func (m *LogcatViewModel) ensureLineVisible() {
 	for i := 0; i <= m.currentLine; i++ {
 		line := logs[i].ModifiedString(cols)
 		if m.outputPrefs.SoftWrap || (m.startSelected != -1 && i >= min && i <= max) {
-			wrapped := softWrapIndent(line, logs[i].PrefixWidth(cols), m.viewport.Width)
+			wrapped := softWrapIndent(line, logs[i].PrefixWidth(cols), m.viewport.Width())
 			linesUpToCurrent += lipgloss.Height(wrapped)
 		} else {
 			linesUpToCurrent++
 		}
 	}
 
-	if linesUpToCurrent < m.viewport.YOffset+2 {
+	if linesUpToCurrent < m.viewport.YOffset()+2 {
 		m.viewport.HalfPageUp()
-	} else if linesUpToCurrent > m.viewport.YOffset+m.viewport.Height-1 {
+	} else if linesUpToCurrent > m.viewport.YOffset()+m.viewport.Height()-1 {
 		m.viewport.HalfPageDown()
 	}
 }
@@ -842,8 +845,8 @@ func (m LogcatViewModel) headerView() string {
 	}
 
 	// border (2) + padding (2) = 4 chars horizontal overhead
-	innerWidth := m.viewport.Width - 4
-	style := titleStyle.Width(m.viewport.Width - 2)
+	innerWidth := m.viewport.Width() - 4
+	style := titleStyle.Width(m.viewport.Width() - 2)
 
 	// Toast has higher priority: reserve space for it first, then truncate header content
 	toastStr := m.toast.View()
@@ -892,7 +895,7 @@ func (m LogcatViewModel) footerView() string {
 
 	help := lipgloss.NewStyle().
 		Foreground(theme.ColorMuted).
-		Width(m.viewport.Width).
+		Width(m.viewport.Width()).
 		AlignHorizontal(lipgloss.Center).
 		Padding(0, 2).
 		Render(helpText)

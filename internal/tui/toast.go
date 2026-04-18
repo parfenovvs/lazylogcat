@@ -1,10 +1,11 @@
 package tui
 
 import (
+	"image/color"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/parfenovvs/lazylogcat/internal/tui/theme"
 )
@@ -67,17 +68,17 @@ func (t ToastModel) View() string {
 	if !t.visible {
 		return ""
 	}
-	var color lipgloss.Color
+	var fg color.Color
 	switch t.level {
 	case ToastWarning:
-		color = theme.ColorWarning
+		fg = theme.ColorWarning
 	case ToastError:
-		color = theme.ColorDanger
+		fg = theme.ColorDanger
 	default:
-		color = theme.ColorRegular
+		fg = theme.ColorRegular
 	}
 	style := lipgloss.NewStyle().
-		Foreground(color)
+		Foreground(fg)
 	return style.Render(t.message)
 }
 

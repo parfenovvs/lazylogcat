@@ -3,9 +3,9 @@ package commandui
 import (
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/parfenovvs/lazylogcat/internal/model"
 	"github.com/parfenovvs/lazylogcat/internal/tui/theme"
@@ -39,7 +39,7 @@ func NewTextInput(cfg TextInputConfig) TextInputModel {
 	ti := textinput.New()
 	ti.Placeholder = cfg.Placeholder
 	ti.CharLimit = 100
-	ti.Width = 30
+	ti.SetWidth(30)
 	ti.SetValue(cfg.Value)
 	ti.Focus()
 
@@ -59,7 +59,7 @@ func NewTextInput(cfg TextInputConfig) TextInputModel {
 // After calling Update, check Submitted() to see if the user pressed Enter successfully.
 func (m TextInputModel) Update(msg tea.Msg) (TextInputModel, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		key := msg.String()
 		if key == "enter" {
 			value := strings.TrimSpace(m.input.Value())

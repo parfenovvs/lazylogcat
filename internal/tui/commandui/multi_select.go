@@ -4,9 +4,9 @@ import (
 	"maps"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/table"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/table"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/parfenovvs/lazylogcat/internal/tui/theme"
 )
@@ -89,8 +89,8 @@ func (m *MultiSelectModel) buildRows(items []string) {
 }
 
 // Update handles key messages. Returns the updated model and a tea.Cmd.
-func (m MultiSelectModel) Update(msg tea.KeyMsg, key string) (MultiSelectModel, tea.Cmd) {
-	if key == "enter" || key == " " {
+func (m MultiSelectModel) Update(msg tea.KeyPressMsg, key string) (MultiSelectModel, tea.Cmd) {
+	if key == "enter" || key == "space" {
 		if name, ok := m.itemMap[m.table.Cursor()]; ok {
 			if m.active[name] {
 				delete(m.active, name)

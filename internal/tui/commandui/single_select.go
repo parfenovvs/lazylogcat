@@ -3,9 +3,9 @@ package commandui
 import (
 	"strings"
 
-	"github.com/charmbracelet/bubbles/table"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/table"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/parfenovvs/lazylogcat/internal/tui/theme"
 )
@@ -85,7 +85,7 @@ func (m *SingleSelectModel) buildRows(items []SingleSelectItem, currentKey strin
 
 // Update handles key messages. Returns the updated model and a tea.Cmd.
 // After calling Update, check Selected() to see if an item was chosen.
-func (m SingleSelectModel) Update(msg tea.KeyMsg, key string) (SingleSelectModel, tea.Cmd) {
+func (m SingleSelectModel) Update(msg tea.KeyPressMsg, key string) (SingleSelectModel, tea.Cmd) {
 	if key == "enter" {
 		if item, ok := m.itemMap[m.table.Cursor()]; ok {
 			m.selected = true

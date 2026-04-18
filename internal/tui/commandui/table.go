@@ -1,10 +1,11 @@
 package commandui
 
 import (
-	"github.com/charmbracelet/bubbles/table"
-	"github.com/charmbracelet/bubbles/textinput"
+	"charm.land/bubbles/v2/table"
+	"charm.land/bubbles/v2/textinput"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/parfenovvs/lazylogcat/internal/tui"
 	"github.com/parfenovvs/lazylogcat/internal/tui/theme"
 )
 
@@ -22,9 +23,12 @@ func newTable(columns []table.Column, rows []table.Row, height int) table.Model 
 		Selected: theme.TableSelected(),
 	}
 
+	// Bubbles v2 table uses an inner viewport; width must be set or View() is empty.
+	innerW := tui.DialogWidth - 4 // dialog border + horizontal padding
 	t := table.New(
 		table.WithColumns(columns),
 		table.WithRows(rows),
+		table.WithWidth(innerW),
 		table.WithHeight(height),
 		table.WithFocused(true),
 		table.WithKeyMap(km),
@@ -57,7 +61,7 @@ func newSearchInput() textinput.Model {
 	ti := textinput.New()
 	ti.Placeholder = "Search"
 	ti.CharLimit = 50
-	ti.Width = 35
+	ti.SetWidth(35)
 	ti.Prompt = ""
 	ti.Focus()
 	return ti

@@ -1,16 +1,23 @@
 package theme
 
 import (
+	"image/color"
 	"testing"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
+
+func colorsEqual(a, b color.Color) bool {
+	ar, ag, ab, aa := a.RGBA()
+	br, bg, bb, ba := b.RGBA()
+	return ar == br && ag == bg && ab == bb && aa == ba
+}
 
 func TestGetLogColor(t *testing.T) {
 	tests := []struct {
 		name  string
 		level string
-		want  lipgloss.Color
+		want  color.Color
 	}{
 		{name: "Verbose", level: "V", want: ColorRegular},
 		{name: "Debug", level: "D", want: lipgloss.Color(blue)},
@@ -18,14 +25,14 @@ func TestGetLogColor(t *testing.T) {
 		{name: "Warn", level: "W", want: lipgloss.Color(yellow)},
 		{name: "Error", level: "E", want: lipgloss.Color(red)},
 		{name: "Fatal", level: "F", want: lipgloss.Color(magenta)},
-		{name: "Unknown", level: "X", want: ""},
-		{name: "Empty", level: "", want: ""},
+		{name: "Unknown", level: "X", want: ColorRegular},
+		{name: "Empty", level: "", want: ColorRegular},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := GetLogColor(tt.level)
-			if got != tt.want {
-				t.Errorf("GetLogColor(%q) = %q, want %q", tt.level, got, tt.want)
+			if !colorsEqual(got, tt.want) {
+				t.Errorf("GetLogColor(%q) = %v, want %v", tt.level, got, tt.want)
 			}
 		})
 	}

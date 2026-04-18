@@ -1,6 +1,10 @@
 package theme
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"image/color"
+
+	"charm.land/lipgloss/v2"
+)
 
 // ANSI-16 base colors (0-15).
 // These map to the terminal emulator's configured color scheme, ensuring
@@ -68,7 +72,15 @@ var (
 // GetLogColor returns a foreground color for the given logcat severity level.
 // Colors use plain ANSI indices (identical for light/dark) because the
 // terminal theme already provides appropriate shades for each index.
-func GetLogColor(level string) lipgloss.Color {
+// IsDefaultForeground reports whether c is the terminal default foreground
+// (no ANSI color sequence), matching [ColorRegular].
+func IsDefaultForeground(c color.Color) bool {
+	ar, ag, ab, aa := c.RGBA()
+	br, bg, bb, ba := ColorRegular.RGBA()
+	return ar == br && ag == bg && ab == bb && aa == ba
+}
+
+func GetLogColor(level string) color.Color {
 	switch level {
 	case "V":
 		return ColorRegular
@@ -83,7 +95,7 @@ func GetLogColor(level string) lipgloss.Color {
 	case "F":
 		return lipgloss.Color(magenta)
 	default:
-		return ""
+		return ColorRegular
 	}
 }
 

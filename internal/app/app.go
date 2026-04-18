@@ -7,7 +7,7 @@ import (
 	"os"
 	"os/exec"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/parfenovvs/lazylogcat/internal/config"
 	"github.com/parfenovvs/lazylogcat/internal/tui/mainui"
 )
@@ -50,11 +50,7 @@ func SetupLogging(debug bool) error {
 }
 
 func LaunchTUI(c config.Config) error {
-	p := tea.NewProgram(
-		mainui.InitMainModel(c),
-		tea.WithAltScreen(),
-		tea.WithMouseCellMotion(),
-	)
+	p := tea.NewProgram(mainui.InitMainModel(c))
 	if _, err := p.Run(); err != nil {
 		return fmt.Errorf("TUI error: %w", err)
 	}
