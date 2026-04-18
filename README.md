@@ -38,16 +38,16 @@ lazylogcat
 lazylogcat --debug
 ```
 
-### Agent skill (Cursor / Claude Code)
+### Agent skill
 
-The binary embeds a skill you can install for coding agents:
+The binary embeds a skill for AI coding agents. Use `lazylogcat skill install --help` for supported `--agent` names and details.
 
 ```bash
-lazylogcat skill install --agent cursor --user
-lazylogcat skill install --agent claude --project
+lazylogcat skill install --agent <agent> --user     # under $HOME
+lazylogcat skill install --agent <agent> --project  # under cwd
 ```
 
-Use `--user` for a global install under your home directory, or `--project` to install next to the current project (the shell working directory matters). Requires `--agent` and exactly one of `--user` or `--project`.
+Pass **`--agent`** and exactly one of **`--user`** or **`--project`**.
 
 ### Tips
 

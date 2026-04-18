@@ -67,17 +67,6 @@ Uses the **Elm Architecture** (Model-View-Update) via Bubble Tea. `MainModel` is
 └── main.go              # Entry point -> cmd.Execute()
 ```
 
-## Agent skill install
-
-The repository ships an embedded **agent skill** under [skills/lazylogcat/SKILL.md](skills/lazylogcat/SKILL.md). It is bundled via [skills/embed.go](skills/embed.go) and copied to the user’s machine with:
-
-```bash
-lazylogcat skill install --agent cursor --user      # ~/.cursor/skills/lazylogcat/
-lazylogcat skill install --agent claude --project   # ./.claude/skills/lazylogcat/ (cwd matters)
-```
-
-Requires `--agent` (`cursor` or `claude`) and **exactly one** of `--user` or `--project`. Does not require `adb`. On success, prints the destination directory.
-
 ## Web UI (experimental)
 
 > **Warning:** The web experience is experimental and may change or break without notice.

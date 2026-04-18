@@ -18,3 +18,5 @@ internal/web/static/
 web-ui/node_modules/
 
 .cursor/
+
+tmp/

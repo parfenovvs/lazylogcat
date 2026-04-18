@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 const (
@@ -16,22 +17,20 @@ const (
 // (the folder that will contain SKILL.md), e.g. ~/.cursor/skills/lazylogcat.
 // home is typically os.UserHomeDir(); cwd is typically os.Getwd() for project scope.
 func Destination(agent string, userScope bool, home, cwd string) (string, error) {
+	agent = strings.TrimSpace(agent)
+	if agent == "" {
+		return "", fmt.Errorf("agent name is empty")
+	}
+	key := normalizeAgent(agent)
+	layout, ok := agentLayouts[key]
+	if !ok {
+		return "", fmt.Errorf("unknown agent %q", agent)
+	}
 	var skillsRoot string
-	switch agent {
-	case AgentCursor:
-		if userScope {
-			skillsRoot = filepath.Join(home, ".cursor", "skills")
-		} else {
-			skillsRoot = filepath.Join(cwd, ".cursor", "skills")
-		}
-	case AgentClaude:
-		if userScope {
-			skillsRoot = filepath.Join(home, ".claude", "skills")
-		} else {
-			skillsRoot = filepath.Join(cwd, ".claude", "skills")
-		}
-	default:
-		return "", fmt.Errorf("unknown agent %q (use %q or %q)", agent, AgentCursor, AgentClaude)
+	if userScope {
+		skillsRoot = layout.userRoot(home)
+	} else {
+		skillsRoot = layout.projectRoot(cwd)
 	}
 	return filepath.Join(skillsRoot, "lazylogcat"), nil
 }
