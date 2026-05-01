@@ -54,24 +54,26 @@ func buildShortcutMap() map[string]model.CommandData {
 }
 
 type LogcatViewModel struct {
-	parentSize         model.Size
-	viewport           viewport.Model
-	device             *model.Device
-	deviceId           string
-	filter             model.Filter
-	outputPrefs        model.OutputPrefs
-	log                *util.RingBuffer
-	reader             *util.LogcatReader
-	visualMode         bool
-	currentLine        int
-	startSelected      int
-	awaitingShortcut   bool
-	connGen            uint64 // incremented on each voluntary reconnect; used to discard stale messages
-	toast              tui.ToastModel
-	showCommandDialog  bool
-	commandDialog      commandui.CommandDialogModel
-	deviceRequired     bool
-	recordingStartTime *time.Time
+	parentSize          model.Size
+	viewport            viewport.Model
+	device              *model.Device
+	deviceId            string
+	filter              model.Filter
+	outputPrefs         model.OutputPrefs
+	log                 *util.RingBuffer
+	reader              *util.LogcatReader
+	visualMode          bool
+	currentLine         int
+	startSelected       int
+	visualLineToLogLine []int
+	logLineVisualStart  []int
+	awaitingShortcut    bool
+	connGen             uint64 // incremented on each voluntary reconnect; used to discard stale messages
+	toast               tui.ToastModel
+	showCommandDialog   bool
+	commandDialog       commandui.CommandDialogModel
+	deviceRequired      bool
+	recordingStartTime  *time.Time
 }
 
 type logcatErrorMsg struct {
@@ -475,34 +477,11 @@ func (m *LogcatViewModel) Render() {
 	var b strings.Builder
 	logs := m.log.All()
 	cols := m.outputPrefs.Columns
+	m.visualLineToLogLine = m.visualLineToLogLine[:0]
+	m.logLineVisualStart = m.logLineVisualStart[:0]
 	for i, logLine := range logs {
+		m.logLineVisualStart = append(m.logLineVisualStart, len(m.visualLineToLogLine))
 		line := logLine.ModifiedString(cols)
-		if m.visualMode {
-			selected := false
-			if m.startSelected >= 0 {
-				min := min(m.currentLine, m.startSelected)
-				max := max(m.currentLine, m.startSelected)
-				selected = i >= min && i <= max
-			} else if i == m.currentLine {
-				selected = true
-			}
-			if selected {
-				var content string
-				if m.outputPrefs.SoftWrap {
-					content = softWrapIndent(line, logLine.PrefixWidth(cols), m.viewport.Width())
-				} else {
-					content = line
-				}
-				styled := lipgloss.NewStyle().
-					Background(theme.ColorVisualBG).
-					Foreground(theme.ColorVisualFG).
-					Width(m.viewport.Width()).
-					Render(content)
-				b.WriteString(styled)
-				b.WriteString("\n")
-				continue
-			}
-		}
 		var content string
 		if m.outputPrefs.SoftWrap {
 			content = softWrapIndent(line, logLine.PrefixWidth(cols), m.viewport.Width())
@@ -517,6 +496,9 @@ func (m *LogcatViewModel) Render() {
 			b.WriteString(content)
 		}
 		b.WriteString("\n")
+		for range strings.Count(content, "\n") + 1 {
+			m.visualLineToLogLine = append(m.visualLineToLogLine, i)
+		}
 	}
 	m.viewport.SetContent(b.String())
 }
@@ -652,14 +634,14 @@ func (m *LogcatViewModel) handleVisualModeKey(key string) updateResult {
 		} else {
 			m.startSelected = m.currentLine
 		}
-		return updateResult{needsRender: true}
+		return updateResult{}
 
 	case "esc":
 		m.visualMode = false
 		m.startSelected = -1
 		// Reader goroutine kept running during visual mode;
 		// next batchTickMsg will drain accumulated lines.
-		return updateResult{needsRender: true}
+		return updateResult{}
 
 	case "y":
 		if m.currentLine >= 0 && m.currentLine < m.log.Size() {
@@ -674,7 +656,7 @@ func (m *LogcatViewModel) handleVisualModeKey(key string) updateResult {
 				}
 				err = util.CopyToClipboard(lines...)
 				m.startSelected = -1
-				return updateResult{needsRender: true}
+				return updateResult{}
 			} else {
 				logs := m.log.Recent(m.log.Size() - m.currentLine)
 				lineText := strings.TrimSpace(logs[0].ModifiedString(m.outputPrefs.Columns))
@@ -706,14 +688,14 @@ func (m *LogcatViewModel) handleVisualModeKey(key string) updateResult {
 		if m.currentLine < m.log.Size()-1 {
 			m.currentLine++
 			m.ensureLineVisible()
-			return updateResult{needsRender: true}
+			return updateResult{}
 		}
 
 	case "k", "up":
 		if m.currentLine > 0 {
 			m.currentLine--
 			m.ensureLineVisible()
-			return updateResult{needsRender: true}
+			return updateResult{}
 		}
 	}
 
@@ -748,35 +730,60 @@ func (m *LogcatViewModel) ensureLineVisible() {
 	if !m.visualMode || m.currentLine < 0 || m.currentLine >= m.log.Size() {
 		return
 	}
-
-	min := min(m.currentLine, m.startSelected)
-	max := max(m.currentLine, m.startSelected)
-
-	logs := m.log.All()
-	cols := m.outputPrefs.Columns
-	linesUpToCurrent := 0
-	for i := 0; i <= m.currentLine; i++ {
-		line := logs[i].ModifiedString(cols)
-		if m.outputPrefs.SoftWrap || (m.startSelected != -1 && i >= min && i <= max) {
-			wrapped := softWrapIndent(line, logs[i].PrefixWidth(cols), m.viewport.Width())
-			linesUpToCurrent += lipgloss.Height(wrapped)
-		} else {
-			linesUpToCurrent++
-		}
+	if m.currentLine >= len(m.logLineVisualStart) {
+		return
 	}
 
-	if linesUpToCurrent < m.viewport.YOffset()+2 {
-		m.viewport.HalfPageUp()
-	} else if linesUpToCurrent > m.viewport.YOffset()+m.viewport.Height()-1 {
-		m.viewport.HalfPageDown()
+	lineTop := m.logLineVisualStart[m.currentLine]
+	lineBottom := lineTop
+	if next := m.currentLine + 1; next < len(m.logLineVisualStart) {
+		lineBottom = m.logLineVisualStart[next] - 1
+	} else if len(m.visualLineToLogLine) > 0 {
+		lineBottom = len(m.visualLineToLogLine) - 1
 	}
+
+	viewportTop := m.viewport.YOffset()
+	viewportBottom := viewportTop + m.viewport.Height() - 1
+	if lineTop < viewportTop {
+		m.viewport.SetYOffset(lineTop)
+	} else if lineBottom > viewportBottom {
+		m.viewport.SetYOffset(lineBottom - m.viewport.Height() + 1)
+	}
+}
+
+func (m LogcatViewModel) visualLineStyle(lineIndex int) lipgloss.Style {
+	if !m.visualMode || lineIndex < 0 || lineIndex >= len(m.visualLineToLogLine) {
+		return lipgloss.NewStyle()
+	}
+	logLine := m.visualLineToLogLine[lineIndex]
+	if !m.logLineSelected(logLine) {
+		return lipgloss.NewStyle()
+	}
+	return lipgloss.NewStyle().
+		Background(theme.ColorVisualBG).
+		Foreground(theme.ColorVisualFG).
+		Width(m.viewport.Width())
+}
+
+func (m LogcatViewModel) logLineSelected(line int) bool {
+	if m.startSelected >= 0 {
+		return line >= min(m.currentLine, m.startSelected) &&
+			line <= max(m.currentLine, m.startSelected)
+	}
+	return line == m.currentLine
+}
+
+func (m LogcatViewModel) viewportView() string {
+	viewport := m.viewport
+	viewport.StyleLineFunc = m.visualLineStyle
+	return viewport.View()
 }
 
 func (m LogcatViewModel) renderBaseView() string {
 	return fmt.Sprintf(
 		"%s\n%s\n%s",
 		m.headerView(),
-		m.viewport.View(),
+		m.viewportView(),
 		m.footerView(),
 	)
 }
