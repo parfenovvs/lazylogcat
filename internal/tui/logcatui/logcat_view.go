@@ -673,6 +673,7 @@ func (m *LogcatViewModel) handleVisualModeKey(key string) updateResult {
 				}
 				err = util.CopyToClipboard(lines...)
 				m.startSelected = -1
+				m.exitVisualMode()
 				return updateResult{}
 			} else {
 				logs := m.log.Recent(m.log.Size() - m.currentLine)
@@ -683,6 +684,7 @@ func (m *LogcatViewModel) handleVisualModeKey(key string) updateResult {
 				slog.Error("Failed to copy to clipboard", "error", err)
 			}
 		}
+		m.exitVisualMode()
 		return updateResult{}
 
 	case "ctrl+e":
