@@ -106,7 +106,6 @@ func TestVisualSelectionForegroundOverridesLogLevelColor(t *testing.T) {
 	want := lipgloss.NewStyle().
 		Background(theme.ColorVisualBG).
 		Foreground(theme.ColorVisualFG).
-		Width(m.viewport.Width()).
 		Render("selected")
 	if got != want {
 		t.Fatalf("selected visual style did not override log level style\n got: %q\nwant: %q", got, want)

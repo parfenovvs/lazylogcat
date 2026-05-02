@@ -769,8 +769,7 @@ func (m LogcatViewModel) visualLineStyle(lineIndex int) lipgloss.Style {
 	if m.visualMode && m.logLineSelected(logLine) {
 		return lipgloss.NewStyle().
 			Background(theme.ColorVisualBG).
-			Foreground(theme.ColorVisualFG).
-			Width(m.viewport.Width())
+			Foreground(theme.ColorVisualFG)
 	}
 	if !m.outputPrefs.Color {
 		return lipgloss.NewStyle()
