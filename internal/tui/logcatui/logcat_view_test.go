@@ -177,6 +177,20 @@ func TestVisualToggleReentryFreshStateAnchorsCenterWhenNotAtBottom(t *testing.T)
 	}
 }
 
+func TestFooterShowsScrollHintWhenNotAtBottom(t *testing.T) {
+	m := New(model.Size{Width: 42, Height: 8}, nil, "", model.Filter{}, testOutputPrefs())
+	appendLogLines(&m, 40)
+	m.Render()
+	m.viewport.SetYOffset(0)
+	if got := m.footerView(); !strings.Contains(got, footerMoreBelowHint) {
+		t.Fatalf("footer when scrolled away from bottom should contain %q\n%s", footerMoreBelowHint, got)
+	}
+	m.viewport.GotoBottom()
+	if got := m.footerView(); strings.Contains(got, footerMoreBelowHint) {
+		t.Fatalf("footer when at bottom should not contain %q\n%s", footerMoreBelowHint, got)
+	}
+}
+
 func TestVisualToggleReentryFreshStateAnchorsLastLineWhenAtBottom(t *testing.T) {
 	m := New(model.Size{Width: 42, Height: 8}, nil, "", model.Filter{}, testOutputPrefs())
 	appendLogLines(&m, 10)

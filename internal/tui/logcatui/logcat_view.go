@@ -23,6 +23,11 @@ import (
 const maxLogLines = 10000
 const batchTimeout = 16 * time.Millisecond
 
+const (
+	footerSideColWidth  = 18
+	footerMoreBelowHint = "↓ recent: shift+g"
+)
+
 var (
 	titleStyle = func() lipgloss.Style {
 		return theme.Panel().
@@ -929,14 +934,27 @@ func (m LogcatViewModel) footerView() string {
 		helpText = helpTextNormal
 	}
 
+	fullWidth := m.viewport.Width()
+	centerWidth := max(0, fullWidth-2*footerSideColWidth)
+
+	leftStyle := lipgloss.NewStyle().Width(footerSideColWidth).MaxWidth(footerSideColWidth)
+	var leftSegment string
+	if m.viewport.AtBottom() {
+		leftSegment = leftStyle.Render("")
+	} else {
+		leftSegment = leftStyle.Foreground(theme.ColorWarning).Render(footerMoreBelowHint)
+	}
+
 	help := lipgloss.NewStyle().
 		Foreground(theme.ColorMuted).
-		Width(m.viewport.Width()).
+		Width(centerWidth).
 		AlignHorizontal(lipgloss.Center).
 		Padding(0, 2).
 		Render(helpText)
 
-	return help
+	rightSegment := lipgloss.NewStyle().Width(footerSideColWidth).Render("")
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, leftSegment, help, rightSegment)
 }
 
 // exportBuffer writes all buffered log lines to a timestamped file in the
