@@ -121,8 +121,8 @@ func NewDialog(cfg DialogConfig) CommandDialogModel {
 
 	columns := []table.Column{
 		{Title: "", Width: 16},
-		{Title: "", Width: tui.DialogWidth - 32},
-		{Title: "", Width: 8},
+		{Title: "", Width: tui.DialogWidth - 34},
+		{Title: "", Width: 10},
 	}
 
 	skipRows := make(map[int]bool)
