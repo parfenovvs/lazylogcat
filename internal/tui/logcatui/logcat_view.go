@@ -16,6 +16,7 @@ import (
 	"github.com/parfenovvs/lazylogcat/internal/model"
 	"github.com/parfenovvs/lazylogcat/internal/tui"
 	"github.com/parfenovvs/lazylogcat/internal/tui/commandui"
+	"github.com/parfenovvs/lazylogcat/internal/tui/helpui"
 	"github.com/parfenovvs/lazylogcat/internal/tui/theme"
 	"github.com/parfenovvs/lazylogcat/internal/util"
 )
@@ -94,6 +95,7 @@ type LogcatViewModel struct {
 	toast               tui.ToastModel
 	showCommandDialog   bool
 	commandDialog       commandui.CommandDialogModel
+	shortcutDialog      helpui.ShortcutHelpDialogModel
 	deviceRequired      bool
 	recordingStartTime  *time.Time
 }
@@ -618,6 +620,7 @@ func (m *LogcatViewModel) handleNormalModeKey(key string) updateResult {
 
 	case "ctrl+x":
 		m.awaitingShortcut = true
+		m.shortcutDialog = helpui.NewShortcutHelpDialogModel(model.CtrlXShortcuts())
 		return updateResult{}
 	}
 
@@ -841,7 +844,9 @@ func (m LogcatViewModel) View() string {
 	baseView := m.renderBaseView()
 
 	if m.awaitingShortcut {
-		return tui.DimView(baseView)
+		dimmedBaseView := tui.DimView(baseView)
+		dialogContent := m.shortcutDialog.View()
+		return tui.OverlayDialog(m.parentSize, dimmedBaseView, dialogContent)
 	}
 
 	if m.showCommandDialog {

@@ -7,6 +7,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/parfenovvs/lazylogcat/internal/tui/commonui"
 	"github.com/parfenovvs/lazylogcat/internal/tui/theme"
 )
 
@@ -175,7 +176,7 @@ func (m *SingleSelectModel) Rebuild(items []SingleSelectItem, currentKey string)
 
 // View renders the single-select dialog.
 func (m SingleSelectModel) View() string {
-	title := dialogTitleWithESC(m.title)
+	title := commonui.DialogTitleWithESC(m.title)
 	footer := theme.DialogHelp().Render(m.footer)
 
 	var body string
@@ -187,5 +188,5 @@ func (m SingleSelectModel) View() string {
 
 	search := theme.DialogSearch().Render(m.searchInput.View())
 	content := title + "\n\n" + search + "\n" + body + "\n\n" + footer
-	return dialogStyle().Render(content)
+	return commonui.DialogFrameStyle().Render(content)
 }

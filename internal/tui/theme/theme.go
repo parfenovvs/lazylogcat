@@ -67,6 +67,9 @@ var (
 
 	// ColorSelectedBG is the background for selected table rows.
 	ColorSelectedBG = lipgloss.Color(brightCyan)
+
+	// ColorBrightMagenta highlights shortcut keys in dialog help (ANSI bright magenta).
+	ColorBrightMagenta = lipgloss.Color(brightMagenta)
 )
 
 // GetLogColor returns a foreground color for the given logcat severity level.

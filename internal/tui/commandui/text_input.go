@@ -8,6 +8,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/parfenovvs/lazylogcat/internal/model"
+	"github.com/parfenovvs/lazylogcat/internal/tui/commonui"
 	"github.com/parfenovvs/lazylogcat/internal/tui/theme"
 )
 
@@ -112,7 +113,7 @@ func (m TextInputModel) Mode() model.TextFilterMode {
 
 // View renders the text input dialog.
 func (m TextInputModel) View() string {
-	title := dialogTitleWithESC(m.title)
+	title := commonui.DialogTitleWithESC(m.title)
 
 	var footer string
 	if m.modeEnabled {
@@ -128,7 +129,7 @@ func (m TextInputModel) View() string {
 
 	input := theme.DialogSearch().Render(m.input.View())
 	content := title + "\n\n" + input + errorLine + "\n\n" + footer
-	return dialogStyle().Render(content)
+	return commonui.DialogFrameStyle().Render(content)
 }
 
 // renderModeHint builds the "TAB contains | exact | regex" footer string

@@ -8,10 +8,10 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/x/ansi"
 
 	"github.com/parfenovvs/lazylogcat/internal/model"
 	"github.com/parfenovvs/lazylogcat/internal/tui"
+	"github.com/parfenovvs/lazylogcat/internal/tui/commonui"
 	"github.com/parfenovvs/lazylogcat/internal/tui/theme"
 )
 
@@ -39,28 +39,6 @@ const (
 	stateTextInput
 	stateMultiSelect
 )
-
-var dialogStyle = func() lipgloss.Style {
-	return theme.Dialog().
-		Width(tui.DialogWidth).
-		MaxHeight(tui.DialogMaxHeight)
-}
-
-// dialogTitleWithESC renders a title line with "ESC" right-aligned.
-// Used by all dialog View() methods to show the dismiss hint in the title bar.
-func dialogTitleWithESC(title string) string {
-	titleStr := theme.DialogTitle().Render(title)
-	escStr := theme.DialogHelp().Render("ESC")
-	// innerWidth = DialogWidth - border(2) - padding(2)
-	innerWidth := tui.DialogWidth - 4
-	titleWidth := ansi.StringWidth(titleStr)
-	rightWidth := innerWidth - titleWidth
-	rightPart := lipgloss.NewStyle().
-		Width(rightWidth).
-		AlignHorizontal(lipgloss.Right).
-		Render(escStr)
-	return titleStr + rightPart
-}
 
 type CommandDialogModel struct {
 	state      dialogState
@@ -458,7 +436,7 @@ func (m CommandDialogModel) View() string {
 }
 
 func (m CommandDialogModel) viewCommands() string {
-	title := dialogTitleWithESC("Commands")
+	title := commonui.DialogTitleWithESC("Commands")
 	footer := theme.DialogHelp().Render("")
 
 	var body string
@@ -470,5 +448,5 @@ func (m CommandDialogModel) viewCommands() string {
 
 	search := theme.DialogSearch().Render(m.searchInput.View())
 	content := title + "\n\n" + search + "\n" + body + "\n\n" + footer
-	return dialogStyle().Render(content)
+	return commonui.DialogFrameStyle().Render(content)
 }

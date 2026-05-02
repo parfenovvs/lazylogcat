@@ -8,6 +8,7 @@ import (
 
 	"github.com/parfenovvs/lazylogcat/internal/model"
 	"github.com/parfenovvs/lazylogcat/internal/tui"
+	"github.com/parfenovvs/lazylogcat/internal/tui/commonui"
 	"github.com/parfenovvs/lazylogcat/internal/tui/theme"
 	"github.com/parfenovvs/lazylogcat/internal/util"
 )
@@ -84,7 +85,7 @@ func (m CommandDialogModel) updateDevices(msg tea.KeyPressMsg, key string) (Comm
 
 func (m CommandDialogModel) viewDevices() string {
 	// Devices has special error/empty states, so we render manually instead of using singleSelect.View()
-	title := dialogTitleWithESC("Select Device")
+	title := commonui.DialogTitleWithESC("Select Device")
 
 	var body string
 	if m.deviceErr != nil {
@@ -102,5 +103,5 @@ func (m CommandDialogModel) viewDevices() string {
 
 	footer := theme.DialogHelp().Render("Refresh: r")
 	content := title + "\n\n" + body + "\n\n" + footer
-	return dialogStyle().Render(content)
+	return commonui.DialogFrameStyle().Render(content)
 }
