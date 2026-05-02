@@ -24,19 +24,34 @@ const maxLogLines = 10000
 const batchTimeout = 16 * time.Millisecond
 
 const (
-	footerSideColWidth  = 18
-	footerMoreBelowHint = "↓ recent: shift+g"
+	footerSideColWidth    = 18
+	footerMoreBelowMarker = " recent"
 )
 
-var (
-	titleStyle = func() lipgloss.Style {
-		return theme.Panel().
-			Padding(0, 1)
-	}()
+// headerFooterPanelStyle matches theme.Panel padding/border shape; border uses visual yellow in visual mode.
+func (m LogcatViewModel) headerFooterPanelStyle() lipgloss.Style {
+	s := theme.Panel().Padding(0, 1)
+	if m.visualMode {
+		s = s.BorderForeground(theme.ColorVisualBG)
+	}
+	return s
+}
 
-	helpTextNormal = "Commands: ctrl+p • Jump to recent: shift+g • Clear: shift+c • Visual: v"
-	helpTextVisual = "Multiline: shift+v • Copy: y • Open in editor: ctrl+e • Exit visual: ESC"
-)
+func footerHelpNormalLine() string {
+	key := lipgloss.NewStyle().Bold(true)
+	return key.Render("ctrl+p") + " commands • " + key.Render("C") + " clear • " + key.Render("v") + " visual"
+}
+
+func footerHelpVisualLine() string {
+	key := lipgloss.NewStyle().Bold(true)
+	return key.Render("V") + " multiline • " + key.Render("y") + " copy • " + key.Render("ctrl+e") + " editor • " + key.Render("ESC") + " exit"
+}
+
+func footerMoreBelowHintLine() string {
+	key := lipgloss.NewStyle().Bold(true).Foreground(theme.ColorWarning)
+	warn := lipgloss.NewStyle().Foreground(theme.ColorWarning)
+	return warn.Render("↓ ") + key.Render("G") + warn.Render(footerMoreBelowMarker)
+}
 
 // shortcutMap maps the second key of a ctrl+x shortcut to its CommandData.
 // Built once from model.Commands() at package init.
@@ -887,7 +902,7 @@ func (m LogcatViewModel) headerView() string {
 
 	// border (2) + padding (2) = 4 chars horizontal overhead
 	innerWidth := m.viewport.Width() - 4
-	style := titleStyle.Width(m.viewport.Width())
+	style := m.headerFooterPanelStyle().Width(m.viewport.Width())
 
 	// Toast has higher priority: reserve space for it first, then truncate header content
 	toastStr := m.toast.View()
@@ -929,32 +944,46 @@ func (m LogcatViewModel) headerView() string {
 func (m LogcatViewModel) footerView() string {
 	var helpText string
 	if m.visualMode {
-		helpText = helpTextVisual
+		helpText = footerHelpVisualLine()
 	} else {
-		helpText = helpTextNormal
+		helpText = footerHelpNormalLine()
 	}
 
-	fullWidth := m.viewport.Width()
-	centerWidth := max(0, fullWidth-2*footerSideColWidth)
+	// border (2) + padding (2) = 4 chars horizontal overhead — same as headerView
+	innerWidth := m.viewport.Width() - 4
+	centerWidth := max(0, innerWidth-2*footerSideColWidth)
 
 	leftStyle := lipgloss.NewStyle().Width(footerSideColWidth).MaxWidth(footerSideColWidth)
 	var leftSegment string
 	if m.viewport.AtBottom() {
 		leftSegment = leftStyle.Render("")
 	} else {
-		leftSegment = leftStyle.Foreground(theme.ColorWarning).Render(footerMoreBelowHint)
+		leftSegment = leftStyle.Render(footerMoreBelowHintLine())
 	}
 
 	help := lipgloss.NewStyle().
-		Foreground(theme.ColorMuted).
+		Foreground(theme.ColorRegular).
 		Width(centerWidth).
 		AlignHorizontal(lipgloss.Center).
 		Padding(0, 2).
 		Render(helpText)
 
-	rightSegment := lipgloss.NewStyle().Width(footerSideColWidth).Render("")
+	rightStyle := lipgloss.NewStyle().Width(footerSideColWidth).MaxWidth(footerSideColWidth).AlignHorizontal(lipgloss.Right)
+	var rightSegment string
+	if m.visualMode {
+		visualBadge := lipgloss.NewStyle().
+			Background(theme.ColorVisualBG).
+			Foreground(theme.ColorVisualFG).
+			Bold(true).
+			Padding(0, 1).
+			Render("VISUAL")
+		rightSegment = rightStyle.Render(visualBadge)
+	} else {
+		rightSegment = rightStyle.Render("")
+	}
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, leftSegment, help, rightSegment)
+	line := lipgloss.JoinHorizontal(lipgloss.Top, leftSegment, help, rightSegment)
+	return m.headerFooterPanelStyle().Width(m.viewport.Width()).Render(line)
 }
 
 // exportBuffer writes all buffered log lines to a timestamped file in the

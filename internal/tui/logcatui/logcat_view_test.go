@@ -182,12 +182,12 @@ func TestFooterShowsScrollHintWhenNotAtBottom(t *testing.T) {
 	appendLogLines(&m, 40)
 	m.Render()
 	m.viewport.SetYOffset(0)
-	if got := m.footerView(); !strings.Contains(got, footerMoreBelowHint) {
-		t.Fatalf("footer when scrolled away from bottom should contain %q\n%s", footerMoreBelowHint, got)
+	if got := m.footerView(); !strings.Contains(got, footerMoreBelowMarker) {
+		t.Fatalf("footer when scrolled away from bottom should contain %q\n%s", footerMoreBelowMarker, got)
 	}
 	m.viewport.GotoBottom()
-	if got := m.footerView(); strings.Contains(got, footerMoreBelowHint) {
-		t.Fatalf("footer when at bottom should not contain %q\n%s", footerMoreBelowHint, got)
+	if got := m.footerView(); strings.Contains(got, footerMoreBelowMarker) {
+		t.Fatalf("footer when at bottom should not contain %q\n%s", footerMoreBelowMarker, got)
 	}
 }
 
