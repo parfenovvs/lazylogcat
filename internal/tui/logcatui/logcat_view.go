@@ -673,18 +673,19 @@ func (m *LogcatViewModel) handleVisualModeKey(key string) updateResult {
 				}
 				err = util.CopyToClipboard(lines...)
 				m.startSelected = -1
-				m.exitVisualMode()
-				return updateResult{}
 			} else {
 				logs := m.log.Recent(m.log.Size() - m.currentLine)
 				lineText := strings.TrimSpace(logs[0].ModifiedString(m.outputPrefs.Columns))
 				err = util.CopyToClipboard(lineText)
 			}
+			toastCmd := m.toast.Show("Copied to clipboard", tui.ToastInfo)
 			if err != nil {
 				slog.Error("Failed to copy to clipboard", "error", err)
+				toastCmd = m.toast.Show("Copy failed", tui.ToastError)
 			}
+			m.exitVisualMode()
+			return updateResult{cmd: toastCmd}
 		}
-		m.exitVisualMode()
 		return updateResult{}
 
 	case "ctrl+e":

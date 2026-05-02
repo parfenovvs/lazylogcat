@@ -134,7 +134,13 @@ func TestExitingVisualModeResetsSelectionState(t *testing.T) {
 	}
 }
 
-func TestVisualToggleReentersWithFreshSelectionState(t *testing.T) {
+// centerViewportLogLine matches enterVisualMode's anchor when the viewport is not at bottom.
+func centerViewportLogLine(m *LogcatViewModel) int {
+	center := m.viewport.YOffset() + (m.viewport.Height()-1)/2
+	return m.visualLineToLogLine[center]
+}
+
+func TestVisualToggleReentryFreshStateAnchorsCenterWhenNotAtBottom(t *testing.T) {
 	m := New(model.Size{Width: 42, Height: 8}, nil, "", model.Filter{}, testOutputPrefs())
 	appendLogLines(&m, 10)
 	m.Render()
@@ -155,6 +161,45 @@ func TestVisualToggleReentersWithFreshSelectionState(t *testing.T) {
 	if m.startSelected != -1 {
 		t.Fatalf("startSelected after exit = %d, want -1", m.startSelected)
 	}
+
+	if _, handled := m.handleGlobalKey("v"); !handled {
+		t.Fatal("visual toggle was not handled")
+	}
+	if !m.visualMode {
+		t.Fatal("visualMode = false after reentry, want true")
+	}
+	want := centerViewportLogLine(&m)
+	if m.currentLine != want {
+		t.Fatalf("currentLine after reentry = %d, want %d (center-row log line)", m.currentLine, want)
+	}
+	if m.startSelected != -1 {
+		t.Fatalf("startSelected after reentry = %d, want -1", m.startSelected)
+	}
+}
+
+func TestVisualToggleReentryFreshStateAnchorsLastLineWhenAtBottom(t *testing.T) {
+	m := New(model.Size{Width: 42, Height: 8}, nil, "", model.Filter{}, testOutputPrefs())
+	appendLogLines(&m, 10)
+	m.Render()
+
+	m.visualMode = true
+	m.currentLine = 3
+	m.startSelected = 1
+
+	if _, handled := m.handleGlobalKey("v"); !handled {
+		t.Fatal("visual toggle was not handled")
+	}
+	if m.visualMode {
+		t.Fatal("visualMode = true after exit, want false")
+	}
+	if m.currentLine != -1 {
+		t.Fatalf("currentLine after exit = %d, want -1", m.currentLine)
+	}
+	if m.startSelected != -1 {
+		t.Fatalf("startSelected after exit = %d, want -1", m.startSelected)
+	}
+
+	m.viewport.GotoBottom()
 
 	if _, handled := m.handleGlobalKey("v"); !handled {
 		t.Fatal("visual toggle was not handled")
