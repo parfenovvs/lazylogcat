@@ -538,6 +538,9 @@ func (m *LogcatViewModel) handleGlobalKey(key string) (updateResult, bool) {
 	switch key {
 	case "G":
 		m.viewport.GotoBottom()
+		if m.visualMode {
+			m.currentLine = m.log.Size() - 1
+		}
 		return updateResult{}, true
 
 	case "v":
