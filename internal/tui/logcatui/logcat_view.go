@@ -557,8 +557,12 @@ func (m *LogcatViewModel) handleGlobalKey(key string) (updateResult, bool) {
 func (m *LogcatViewModel) enterVisualMode() {
 	m.visualMode = true
 	m.startSelected = -1
-	m.viewport.GotoBottom()
-	m.currentLine = m.log.Size() - 1
+	if m.viewport.AtBottom() {
+		m.currentLine = m.log.Size() - 1
+	} else {
+		centerVisual := m.viewport.YOffset() + (m.viewport.Height()-1)/2
+		m.currentLine = m.visualLineToLogLine[centerVisual]
+	}
 }
 
 func (m *LogcatViewModel) exitVisualMode() {
