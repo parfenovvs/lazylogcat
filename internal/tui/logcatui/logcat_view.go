@@ -873,7 +873,7 @@ func (m LogcatViewModel) headerView() string {
 
 	// border (2) + padding (2) = 4 chars horizontal overhead
 	innerWidth := m.viewport.Width() - 4
-	style := titleStyle.Width(m.viewport.Width() - 2)
+	style := titleStyle.Width(m.viewport.Width())
 
 	// Toast has higher priority: reserve space for it first, then truncate header content
 	toastStr := m.toast.View()
