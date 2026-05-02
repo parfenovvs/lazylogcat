@@ -16,6 +16,8 @@ func newTable(columns []table.Column, rows []table.Row, height int) table.Model 
 	km.HalfPageUp.SetEnabled(false)
 	km.HalfPageDown.SetEnabled(false)
 	km.PageDown.SetEnabled(false)
+	km.LineUp.SetKeys("up", "ctrl+k")
+	km.LineDown.SetKeys("down", "ctrl+j")
 
 	s := table.Styles{
 		Header:   theme.TableHeader(),

@@ -95,7 +95,7 @@ func (m SingleSelectModel) Update(msg tea.KeyPressMsg, key string) (SingleSelect
 	}
 
 	// Arrow keys go to table navigation
-	if key == "up" || key == "down" {
+	if key == "up" || key == "down" || key == "ctrl+k" || key == "ctrl+j" {
 		if len(m.itemMap) > 0 {
 			m.table, _ = m.table.Update(msg)
 		}

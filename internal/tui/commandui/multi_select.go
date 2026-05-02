@@ -103,7 +103,7 @@ func (m MultiSelectModel) Update(msg tea.KeyPressMsg, key string) (MultiSelectMo
 	}
 
 	// Arrow keys go to table navigation
-	if key == "up" || key == "down" {
+	if key == "up" || key == "down" || key == "ctrl+k" || key == "ctrl+j" {
 		m.table, _ = m.table.Update(msg)
 		return m, nil
 	}

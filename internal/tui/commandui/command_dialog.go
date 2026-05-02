@@ -302,7 +302,7 @@ func (m CommandDialogModel) updateCommands(msg tea.KeyPressMsg, key string) (Com
 	}
 
 	// Arrow keys go to table navigation
-	if key == "up" || key == "down" {
+	if key == "up" || key == "down" || key == "ctrl+j" || key == "ctrl+k" {
 		prevCursor := m.table.Cursor()
 		m.table, _ = m.table.Update(msg)
 		newCursor := m.table.Cursor()
