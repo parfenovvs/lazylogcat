@@ -5,7 +5,10 @@ import (
 	"strings"
 	"testing"
 
+	"charm.land/lipgloss/v2"
+
 	"github.com/parfenovvs/lazylogcat/internal/model"
+	"github.com/parfenovvs/lazylogcat/internal/tui/theme"
 )
 
 func testOutputPrefs() model.OutputPrefs {
@@ -79,6 +82,34 @@ func TestVisualSelectionStyleUsesWrappedLineMap(t *testing.T) {
 		if !strings.Contains(rendered, "\x1b[") {
 			t.Fatalf("visual line %d for selected log line was not styled", visualLine)
 		}
+	}
+}
+
+func TestVisualSelectionForegroundOverridesLogLevelColor(t *testing.T) {
+	prefs := testOutputPrefs()
+	prefs.Color = true
+	m := New(model.Size{Width: 42, Height: 8}, nil, "", model.Filter{}, prefs)
+	appendLogLines(&m, 1)
+	m.Render()
+
+	if strings.Contains(m.viewport.GetContent(), "\x1b[") {
+		t.Fatal("viewport content contains ANSI styling")
+	}
+	if got := m.viewportView(); !strings.Contains(got, "\x1b[") {
+		t.Fatal("viewport view did not apply log level styling")
+	}
+
+	m.visualMode = true
+	m.currentLine = 0
+
+	got := m.visualLineStyle(0).Render("selected")
+	want := lipgloss.NewStyle().
+		Background(theme.ColorVisualBG).
+		Foreground(theme.ColorVisualFG).
+		Width(m.viewport.Width()).
+		Render("selected")
+	if got != want {
+		t.Fatalf("selected visual style did not override log level style\n got: %q\nwant: %q", got, want)
 	}
 }
 

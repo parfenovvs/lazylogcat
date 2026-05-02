@@ -2,6 +2,7 @@ package logcatui
 
 import (
 	"fmt"
+	"image/color"
 	"log/slog"
 	"os"
 	"strings"
@@ -67,6 +68,7 @@ type LogcatViewModel struct {
 	startSelected       int
 	visualLineToLogLine []int
 	logLineVisualStart  []int
+	logLineColor        []color.Color
 	awaitingShortcut    bool
 	connGen             uint64 // incremented on each voluntary reconnect; used to discard stale messages
 	toast               tui.ToastModel
@@ -479,8 +481,10 @@ func (m *LogcatViewModel) Render() {
 	cols := m.outputPrefs.Columns
 	m.visualLineToLogLine = m.visualLineToLogLine[:0]
 	m.logLineVisualStart = m.logLineVisualStart[:0]
+	m.logLineColor = m.logLineColor[:0]
 	for i, logLine := range logs {
 		m.logLineVisualStart = append(m.logLineVisualStart, len(m.visualLineToLogLine))
+		m.logLineColor = append(m.logLineColor, theme.GetLogColor(logLine.Level))
 		line := logLine.ModifiedString(cols)
 		var content string
 		if m.outputPrefs.SoftWrap {
@@ -489,12 +493,7 @@ func (m *LogcatViewModel) Render() {
 			content = line
 		}
 
-		levelColor := theme.GetLogColor(logLine.Level)
-		if m.outputPrefs.Color && !theme.IsDefaultForeground(levelColor) {
-			b.WriteString(lipgloss.NewStyle().Foreground(levelColor).Render(content))
-		} else {
-			b.WriteString(content)
-		}
+		b.WriteString(content)
 		b.WriteString("\n")
 		for range strings.Count(content, "\n") + 1 {
 			m.visualLineToLogLine = append(m.visualLineToLogLine, i)
@@ -752,17 +751,27 @@ func (m *LogcatViewModel) ensureLineVisible() {
 }
 
 func (m LogcatViewModel) visualLineStyle(lineIndex int) lipgloss.Style {
-	if !m.visualMode || lineIndex < 0 || lineIndex >= len(m.visualLineToLogLine) {
+	if lineIndex < 0 || lineIndex >= len(m.visualLineToLogLine) {
 		return lipgloss.NewStyle()
 	}
 	logLine := m.visualLineToLogLine[lineIndex]
-	if !m.logLineSelected(logLine) {
+	if m.visualMode && m.logLineSelected(logLine) {
+		return lipgloss.NewStyle().
+			Background(theme.ColorVisualBG).
+			Foreground(theme.ColorVisualFG).
+			Width(m.viewport.Width())
+	}
+	if !m.outputPrefs.Color {
 		return lipgloss.NewStyle()
 	}
-	return lipgloss.NewStyle().
-		Background(theme.ColorVisualBG).
-		Foreground(theme.ColorVisualFG).
-		Width(m.viewport.Width())
+	if logLine < 0 || logLine >= len(m.logLineColor) {
+		return lipgloss.NewStyle()
+	}
+	levelColor := m.logLineColor[logLine]
+	if theme.IsDefaultForeground(levelColor) {
+		return lipgloss.NewStyle()
+	}
+	return lipgloss.NewStyle().Foreground(levelColor)
 }
 
 func (m LogcatViewModel) logLineSelected(line int) bool {
