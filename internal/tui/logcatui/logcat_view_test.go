@@ -113,6 +113,64 @@ func TestVisualSelectionForegroundOverridesLogLevelColor(t *testing.T) {
 	}
 }
 
+func TestExitingVisualModeResetsSelectionState(t *testing.T) {
+	m := New(model.Size{Width: 42, Height: 8}, nil, "", model.Filter{}, testOutputPrefs())
+	appendLogLines(&m, 10)
+	m.Render()
+
+	m.visualMode = true
+	m.currentLine = 3
+	m.startSelected = 1
+
+	m.handleVisualModeKey("esc")
+
+	if m.visualMode {
+		t.Fatal("visualMode = true, want false")
+	}
+	if m.currentLine != -1 {
+		t.Fatalf("currentLine = %d, want -1", m.currentLine)
+	}
+	if m.startSelected != -1 {
+		t.Fatalf("startSelected = %d, want -1", m.startSelected)
+	}
+}
+
+func TestVisualToggleReentersWithFreshSelectionState(t *testing.T) {
+	m := New(model.Size{Width: 42, Height: 8}, nil, "", model.Filter{}, testOutputPrefs())
+	appendLogLines(&m, 10)
+	m.Render()
+
+	m.visualMode = true
+	m.currentLine = 3
+	m.startSelected = 1
+
+	if _, handled := m.handleGlobalKey("v"); !handled {
+		t.Fatal("visual toggle was not handled")
+	}
+	if m.visualMode {
+		t.Fatal("visualMode = true after exit, want false")
+	}
+	if m.currentLine != -1 {
+		t.Fatalf("currentLine after exit = %d, want -1", m.currentLine)
+	}
+	if m.startSelected != -1 {
+		t.Fatalf("startSelected after exit = %d, want -1", m.startSelected)
+	}
+
+	if _, handled := m.handleGlobalKey("v"); !handled {
+		t.Fatal("visual toggle was not handled")
+	}
+	if !m.visualMode {
+		t.Fatal("visualMode = false after reentry, want true")
+	}
+	if m.currentLine != m.log.Size()-1 {
+		t.Fatalf("currentLine after reentry = %d, want %d", m.currentLine, m.log.Size()-1)
+	}
+	if m.startSelected != -1 {
+		t.Fatalf("startSelected after reentry = %d, want -1", m.startSelected)
+	}
+}
+
 func TestBuildShortcutMap(t *testing.T) {
 	m := buildShortcutMap()
 

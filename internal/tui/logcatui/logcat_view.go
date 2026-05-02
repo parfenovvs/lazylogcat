@@ -235,7 +235,7 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		m.showCommandDialog = false
 		switch msg.Command {
 		case model.CommandReconnect:
-			m.visualMode = false
+			m.exitVisualMode()
 			return m, func() tea.Msg { return tui.ReconnectLogcatCmd{} }
 		case model.CommandExportBuffer:
 			return m, m.exportBuffer()
@@ -541,18 +541,30 @@ func (m *LogcatViewModel) handleGlobalKey(key string) (updateResult, bool) {
 		return updateResult{}, true
 
 	case "v":
-		m.visualMode = !m.visualMode
 		if m.visualMode {
-			m.viewport.GotoBottom()
-			m.currentLine = m.log.Size() - 1
+			m.exitVisualMode()
+			// Reader goroutine kept running during visual mode;
+			// next batchTickMsg will drain accumulated lines.
 			return updateResult{needsRender: true}, true
 		}
-		// Reader goroutine kept running during visual mode;
-		// next batchTickMsg will drain accumulated lines.
+		m.enterVisualMode()
 		return updateResult{needsRender: true}, true
 	}
 
 	return updateResult{}, false
+}
+
+func (m *LogcatViewModel) enterVisualMode() {
+	m.visualMode = true
+	m.startSelected = -1
+	m.viewport.GotoBottom()
+	m.currentLine = m.log.Size() - 1
+}
+
+func (m *LogcatViewModel) exitVisualMode() {
+	m.visualMode = false
+	m.currentLine = -1
+	m.startSelected = -1
 }
 
 // handleNormalModeKey handles keys specific to normal (non-visual) mode
@@ -599,7 +611,7 @@ func (m *LogcatViewModel) handleShortcutKey(key string) updateResult {
 	if cmdData.Type == model.CommandTypeAction {
 		switch cmdData.Command {
 		case model.CommandReconnect:
-			m.visualMode = false
+			m.exitVisualMode()
 			return updateResult{cmd: func() tea.Msg { return tui.ReconnectLogcatCmd{} }}
 		case model.CommandExit:
 			return updateResult{cmd: func() tea.Msg { return tui.ExitCmd{} }}
@@ -636,8 +648,7 @@ func (m *LogcatViewModel) handleVisualModeKey(key string) updateResult {
 		return updateResult{}
 
 	case "esc":
-		m.visualMode = false
-		m.startSelected = -1
+		m.exitVisualMode()
 		// Reader goroutine kept running during visual mode;
 		// next batchTickMsg will drain accumulated lines.
 		return updateResult{}
