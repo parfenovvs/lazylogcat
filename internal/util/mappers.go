@@ -5,6 +5,9 @@ import (
 	"github.com/parfenovvs/lazylogcat/internal/model"
 )
 
+// MaxTagWidth is the maximum fixed tag column width in terminal cells (matches config.schema.json).
+const MaxTagWidth = 99
+
 func FilterFromConfig(c *config.Config) model.Filter {
 	pkg := textFilterFromConfig(c.Filter.Pkg)
 	tag := textFilterFromConfig(c.Filter.Tag)
@@ -53,6 +56,22 @@ func WrapFromConfig(c *config.Config) bool {
 		return true
 	}
 	return *c.Display.Wrap
+}
+
+// TagWidthFromConfig returns model.OutputPrefs.TagWidth: 0 means auto width.
+// Values are clamped to [0, MaxTagWidth].
+func TagWidthFromConfig(c *config.Config) int {
+	if c.Display.TagWidth == nil {
+		return 0
+	}
+	w := *c.Display.TagWidth
+	if w < 0 {
+		return 0
+	}
+	if w > MaxTagWidth {
+		return MaxTagWidth
+	}
+	return w
 }
 
 func ColumnsFromConfig(c *config.Config) model.Columns {

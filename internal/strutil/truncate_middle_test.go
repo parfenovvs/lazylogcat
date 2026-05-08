@@ -1,4 +1,4 @@
-package commandui
+package strutil
 
 import (
 	"strings"
@@ -21,18 +21,27 @@ func TestTruncateMiddle(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := truncateMiddle(tt.input, tt.maxWidth)
+			got := TruncateMiddle(tt.input, tt.maxWidth)
 			if got != tt.want {
-				t.Errorf("truncateMiddle(%q, %d) = %q, want %q", tt.input, tt.maxWidth, got, tt.want)
+				t.Errorf("TruncateMiddle(%q, %d) = %q, want %q", tt.input, tt.maxWidth, got, tt.want)
 			}
 		})
 	}
 
 	t.Run("Unicode", func(t *testing.T) {
 		input := "日本語テスト文字列"
-		got := truncateMiddle(input, 5)
+		got := TruncateMiddle(input, 5)
 		if !strings.Contains(got, "…") {
-			t.Errorf("truncateMiddle(%q, 5) = %q, expected ellipsis in result", input, got)
+			t.Errorf("TruncateMiddle(%q, 5) = %q, expected ellipsis in result", input, got)
 		}
 	})
+}
+
+func TestPadANSIWidth(t *testing.T) {
+	if got := PadANSIWidth("hi", 5); got != "hi   " {
+		t.Errorf("PadANSIWidth(%q, 5) = %q", "hi", got)
+	}
+	if got := PadANSIWidth("hello", 3); got != "hello" {
+		t.Errorf("already wider string should be unchanged, got %q", got)
+	}
 }

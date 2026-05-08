@@ -68,3 +68,24 @@ func TestOutputPrefsFromActive(t *testing.T) {
 		})
 	}
 }
+
+func TestOutputPrefsMergePreservesTagWidth(t *testing.T) {
+	// Esc from Output multiselect merges columns from the widget but must keep TagWidth
+	// from the dialog model (see command_dialog Esc handling).
+	prev := model.OutputPrefs{
+		TagWidth: 17,
+		Color:    true,
+		Columns:  model.Columns{Time: true, Tag: true},
+	}
+	active := map[string]bool{"Wrap": true, "Level": true}
+	got := outputPrefsFromActive(active)
+	got.TagWidth = prev.TagWidth
+	want := model.OutputPrefs{
+		TagWidth: 17,
+		SoftWrap: true,
+		Columns:  model.Columns{Level: true},
+	}
+	if got != want {
+		t.Errorf("merged prefs = %+v, want %+v", got, want)
+	}
+}

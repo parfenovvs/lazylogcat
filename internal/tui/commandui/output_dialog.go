@@ -85,3 +85,13 @@ func (m CommandDialogModel) updateMultiSelect(msg tea.KeyPressMsg, key string) (
 	m.multiSelect, _ = m.multiSelect.Update(msg, key)
 	return m, nil
 }
+
+func (m CommandDialogModel) updateNumberInput(msg tea.KeyPressMsg, key string) (CommandDialogModel, tea.Cmd) {
+	_ = key
+	m.numberInput, _ = m.numberInput.Update(msg)
+	if m.numberInput.Submitted() {
+		value := m.numberInput.Value()
+		return m, func() tea.Msg { return TagWidthSelectMsg{Width: value} }
+	}
+	return m, nil
+}

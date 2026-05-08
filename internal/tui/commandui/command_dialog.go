@@ -10,6 +10,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/parfenovvs/lazylogcat/internal/model"
+	"github.com/parfenovvs/lazylogcat/internal/strutil"
 	"github.com/parfenovvs/lazylogcat/internal/tui"
 	"github.com/parfenovvs/lazylogcat/internal/tui/commonui"
 	"github.com/parfenovvs/lazylogcat/internal/tui/theme"
@@ -38,6 +39,7 @@ const (
 	stateDevices
 	stateTextInput
 	stateMultiSelect
+	stateNumberInput
 )
 
 type CommandDialogModel struct {
@@ -55,6 +57,7 @@ type CommandDialogModel struct {
 	singleSelect SingleSelectModel
 	multiSelect  MultiSelectModel
 	textInputDlg TextInputModel
+	numberInput  NumberSelectorModel
 
 	// Context for the active subdialog
 	activeCommand model.Command
@@ -122,7 +125,7 @@ func NewDialog(cfg DialogConfig) CommandDialogModel {
 				continue
 			}
 			commandMap[len(rows)] = cmd
-			value := truncateMiddle(resolveValue(cmd.Command), 10)
+			value := strutil.TruncateMiddle(resolveValue(cmd.Command), 10)
 			rows = append(rows, table.Row{cmd.Name, value, cmd.Shortcut})
 		}
 	}
@@ -194,6 +197,10 @@ func (m CommandDialogModel) openSubdialog(cmd model.Command) (CommandDialogModel
 	case model.CommandOutput:
 		m.multiSelect = newOutputMultiSelect(m.outputPrefs)
 		m.state = stateMultiSelect
+	case model.CommandTagWidth:
+		m.numberInput = newTagWidthSelect(m.outputPrefs)
+		m.state = stateNumberInput
+		return m, initTextInputCmd()
 	case model.CommandDevices:
 		ss, allDevices, err := loadDevices(m.selectedDevice)
 		m.singleSelect = ss
@@ -224,6 +231,7 @@ func (m CommandDialogModel) Update(msg tea.Msg) (CommandDialogModel, tea.Cmd) {
 		if key == "ctrl+p" || key == "esc" {
 			if m.state == stateMultiSelect {
 				prefs := outputPrefsFromActive(m.multiSelect.ActiveItems())
+				prefs.TagWidth = m.outputPrefs.TagWidth
 				return m, func() tea.Msg { return OutputPrefsChangedMsg{OutputPrefs: prefs} }
 			}
 			return m, func() tea.Msg { return CommandDialogCloseMsg{} }
@@ -240,16 +248,16 @@ func (m CommandDialogModel) Update(msg tea.Msg) (CommandDialogModel, tea.Cmd) {
 			return m.updateTextInput(msg, key)
 		case stateMultiSelect:
 			return m.updateMultiSelect(msg, key)
+		case stateNumberInput:
+			return m.updateNumberInput(msg, key)
 		}
 	default:
-		// Forward non-key messages (e.g. cursor blink) to the active widget.
-		if m.state == stateTextInput {
+		// Forward non-key messages to the appropriate widget for cursor blink.
+		switch m.state {
+		case stateTextInput:
 			var cmd tea.Cmd
 			m.textInputDlg, cmd = m.textInputDlg.Update(msg)
 			return m, cmd
-		}
-		// Forward non-key messages to the appropriate widget for cursor blink.
-		switch m.state {
 		case stateLogLevel, stateDevices:
 			var cmd tea.Cmd
 			m.singleSelect, cmd = m.singleSelect.UpdateBlink(msg)
@@ -257,6 +265,10 @@ func (m CommandDialogModel) Update(msg tea.Msg) (CommandDialogModel, tea.Cmd) {
 		case stateMultiSelect:
 			var cmd tea.Cmd
 			m.multiSelect, cmd = m.multiSelect.UpdateBlink(msg)
+			return m, cmd
+		case stateNumberInput:
+			var cmd tea.Cmd
+			m.numberInput, cmd = m.numberInput.Update(msg)
 			return m, cmd
 		default:
 			var cmd tea.Cmd
@@ -430,6 +442,8 @@ func (m CommandDialogModel) View() string {
 		return m.textInputDlg.View()
 	case stateMultiSelect:
 		return m.multiSelect.View()
+	case stateNumberInput:
+		return m.numberInput.View()
 	default:
 		return m.viewCommands()
 	}

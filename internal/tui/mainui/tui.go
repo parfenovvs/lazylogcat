@@ -61,6 +61,7 @@ func InitMainModel(c config.Config) MainModel {
 		Color:    util.ColorFromConfig(&c),
 		SoftWrap: util.WrapFromConfig(&c),
 		Columns:  util.ColumnsFromConfig(&c),
+		TagWidth: util.TagWidthFromConfig(&c),
 	}
 
 	// Always start in logcat view

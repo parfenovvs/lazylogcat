@@ -16,4 +16,5 @@ type OutputPrefs struct {
 	Color    bool    `json:"color"`
 	SoftWrap bool    `json:"softWrap"`
 	Columns  Columns `json:"columns"`
+	TagWidth int     `json:"tagWidth"`
 }

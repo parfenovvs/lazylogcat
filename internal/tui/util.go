@@ -11,7 +11,7 @@ import (
 // Dialog size constants used by the command dialog overlay.
 const (
 	DialogWidth     = 48
-	DialogMaxHeight = 27
+	DialogMaxHeight = 28
 )
 
 // DimView applies a dimming effect to the view content

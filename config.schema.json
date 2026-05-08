@@ -25,6 +25,12 @@
           "description": "Enable soft-wrapping of long log lines to fit the terminal width.",
           "default": true
         },
+        "tag_width": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 99,
+          "description": "Fixed width for the log tag column (terminal display width). Use 0 for automatic width."
+        },
         "columns": {
           "type": "object",
           "description": "Controls which fields of a parsed log line are visible.",

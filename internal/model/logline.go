@@ -3,6 +3,9 @@ package model
 import (
 	"fmt"
 	"strings"
+
+	"github.com/charmbracelet/x/ansi"
+	"github.com/parfenovvs/lazylogcat/internal/strutil"
 )
 
 // LogLine represents a parsed logcat log line in the threadtime format.
@@ -107,9 +110,46 @@ func (l LogLine) String() string {
 	return l.Raw
 }
 
-// ModifiedString returns the log line with only the columns specified by cols.
+// truncateTagToWidth formats tag when ansi.StringWidth(tag) > width.
+// width 1: first rune only; width 2: first rune + ellipsis; wider: middle ellipsis via TruncateMiddle.
+func truncateTagToWidth(tag string, width int) string {
+	switch width {
+	case 1:
+		r := []rune(tag)
+		if len(r) == 0 {
+			return ""
+		}
+		return string(r[0])
+	case 2:
+		r := []rune(tag)
+		if len(r) == 0 {
+			return ""
+		}
+		return string(r[0]) + "…"
+	default:
+		return strutil.TruncateMiddle(tag, width)
+	}
+}
+
+// tagColumnToken returns the tag field as shown in ModifiedString (trim/pad + colon).
+func tagColumnToken(tag string, prefs OutputPrefs) string {
+	if prefs.TagWidth <= 0 {
+		return tag + ":"
+	}
+	w := prefs.TagWidth
+	if ansi.StringWidth(tag) <= w {
+		return strutil.PadANSIWidth(tag, w) + ":"
+	}
+	return truncateTagToWidth(tag, w) + ":"
+}
+
+// ModifiedString returns the log line with only the columns specified by prefs.Columns.
+// When prefs.Columns.Tag is enabled and prefs.TagWidth > 0, the tag is padded or truncated
+// to that width (narrow widths use first rune + optional ellipsis; wider uses middle ellipsis),
+// then ":" is appended.
 // If the line was not successfully parsed, the original raw line is returned.
-func (l LogLine) ModifiedString(cols Columns) string {
+func (l LogLine) ModifiedString(prefs OutputPrefs) string {
+	cols := prefs.Columns
 	if !l.Parsed() {
 		return l.Raw
 	}
@@ -130,7 +170,7 @@ func (l LogLine) ModifiedString(cols Columns) string {
 		parts = append(parts, l.Level)
 	}
 	if cols.Tag {
-		parts = append(parts, l.Tag+":")
+		parts = append(parts, tagColumnToken(l.Tag, prefs))
 	}
 	if cols.Message {
 		parts = append(parts, l.Message)
@@ -138,11 +178,13 @@ func (l LogLine) ModifiedString(cols Columns) string {
 	return strings.Join(parts, " ")
 }
 
-// PrefixWidth returns the visual width of all enabled columns before Message,
-// including the separating spaces. If Message is enabled the trailing space
-// between the last prefix column and the message is included.
+// PrefixWidth returns the UTF-8 byte offset into ModifiedString(prefs) where the
+// message text begins when Columns.Message is enabled (the offset follows the
+// single separator space between prefix columns and the message).
+// When Message is disabled, it returns len(ModifiedString(prefs)) (the full line length).
 // Returns 0 when the line was not parsed or no prefix columns are enabled.
-func (l LogLine) PrefixWidth(cols Columns) int {
+func (l LogLine) PrefixWidth(prefs OutputPrefs) int {
+	cols := prefs.Columns
 	if !l.Parsed() {
 		return 0
 	}
@@ -163,7 +205,7 @@ func (l LogLine) PrefixWidth(cols Columns) int {
 		parts = append(parts, l.Level)
 	}
 	if cols.Tag {
-		parts = append(parts, l.Tag+":")
+		parts = append(parts, tagColumnToken(l.Tag, prefs))
 	}
 	if len(parts) == 0 {
 		return 0
