@@ -15,6 +15,11 @@ func boolPtr(v bool) *bool {
 	return &v
 }
 
+// intPtr returns a pointer to an int value, useful for Config.Display.TagWidth.
+func intPtr(v int) *int {
+	return &v
+}
+
 // compareBoolPtr compares two *bool values and reports an error if they differ.
 func compareBoolPtr(t *testing.T, field string, got, want *bool) {
 	t.Helper()
@@ -49,6 +54,21 @@ func compareColumns(t *testing.T, got, want *Columns) {
 	compareBoolPtr(t, "Display.Columns.Message", got.Message, want.Message)
 }
 
+// compareIntPtr compares two *int values and reports an error if they differ.
+func compareIntPtr(t *testing.T, field string, got, want *int) {
+	t.Helper()
+	if got == nil && want == nil {
+		return
+	}
+	if got == nil || want == nil {
+		t.Errorf("%s = %v, want %v", field, got, want)
+		return
+	}
+	if *got != *want {
+		t.Errorf("%s = %v, want %v", field, *got, *want)
+	}
+}
+
 // compareConfigs compares two Config structs field by field and reports detailed errors.
 func compareConfigs(t *testing.T, got, want Config) {
 	t.Helper()
@@ -56,6 +76,7 @@ func compareConfigs(t *testing.T, got, want Config) {
 	// Compare Display
 	compareBoolPtr(t, "Display.Color", got.Display.Color, want.Display.Color)
 	compareBoolPtr(t, "Display.Wrap", got.Display.Wrap, want.Display.Wrap)
+	compareIntPtr(t, "Display.TagWidth", got.Display.TagWidth, want.Display.TagWidth)
 	compareColumns(t, got.Display.Columns, want.Display.Columns)
 
 	// Compare Filter
@@ -395,6 +416,11 @@ func TestLoadFile(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:       "TagWidth",
+			jsonData:   `{"display": {"tag_width": 17}}`,
+			wantConfig: Config{Display: Display{TagWidth: intPtr(17)}},
+		},
 	}
 
 	for _, tt := range tests {
@@ -572,6 +598,28 @@ func TestMerge(t *testing.T) {
 				Display: Display{
 					Color: boolPtr(false),
 				},
+			},
+		},
+		{
+			name: "TagWidthOverlayReplacesBase",
+			base: Config{
+				Display: Display{TagWidth: intPtr(12)},
+			},
+			overlay: Config{
+				Display: Display{TagWidth: intPtr(24)},
+			},
+			want: Config{
+				Display: Display{TagWidth: intPtr(24)},
+			},
+		},
+		{
+			name: "NilTagWidthPreservesBase",
+			base: Config{
+				Display: Display{TagWidth: intPtr(12)},
+			},
+			overlay: Config{},
+			want: Config{
+				Display: Display{TagWidth: intPtr(12)},
 			},
 		},
 		{

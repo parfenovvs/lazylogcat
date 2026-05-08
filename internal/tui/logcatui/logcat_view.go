@@ -280,6 +280,12 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		m.Render()
 		return m, nil
 
+	case commandui.TagWidthSelectMsg:
+		m.showCommandDialog = false
+		m.outputPrefs.TagWidth = msg.Width
+		m.Render()
+		return m, nil
+
 	case tui.ToastExpiredMsg:
 		m.toast.Update(msg)
 
@@ -396,12 +402,11 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 				if !wasAtBottom && m.log.Size() >= maxLogLines {
 					evictCount := min(len(lines), maxLogLines)
 					oldest := m.log.All()
-					cols := m.outputPrefs.Columns
 					for i := 0; i < evictCount && i < len(oldest); i++ {
 						if m.outputPrefs.SoftWrap {
 							rendered := softWrapIndent(
-								oldest[i].ModifiedString(cols),
-								oldest[i].PrefixWidth(cols),
+								oldest[i].ModifiedString(m.outputPrefs),
+								oldest[i].PrefixWidth(m.outputPrefs),
 								m.viewport.Width(),
 							)
 							yOffsetAdjust += lipgloss.Height(rendered)
@@ -456,24 +461,26 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 }
 
 // softWrapIndent wraps line so that the first terminal line occupies up to
-// viewportWidth characters and every continuation line is indented by
-// prefixWidth spaces (aligning with the start of the message column).
-// When prefixWidth is 0 or leaves no room for the message, it falls back to
-// a plain width-constrained render via lipgloss.
-func softWrapIndent(line string, prefixWidth, viewportWidth int) string {
-	msgWidth := viewportWidth - prefixWidth
-	if prefixWidth <= 0 || msgWidth < 4 {
+// viewportWidth cells and every continuation line is indented to align with the
+// start of the message column (prefixByteLen is a UTF-8 byte offset into line).
+// When indent cannot be derived or leaves too little room for the message, it
+// falls back to a plain width-constrained render via lipgloss.
+func softWrapIndent(line string, prefixByteLen, viewportWidth int) string {
+	prefix := ""
+	if prefixByteLen > 0 && prefixByteLen <= len(line) {
+		prefix = line[:prefixByteLen]
+	}
+	indentCols := ansi.StringWidth(prefix)
+	msgWidth := viewportWidth - indentCols
+	if indentCols <= 0 || msgWidth < 4 {
 		// Fallback: no useful indent possible
 		return lipgloss.NewStyle().Width(viewportWidth).Render(line)
 	}
 
 	// Split the assembled line into prefix and message portions.
-	// PrefixWidth includes the trailing space, so line[:prefixWidth] is the
-	// prefix with its separator and line[prefixWidth:] is the message text.
-	var prefix, message string
-	if prefixWidth < len(line) {
-		prefix = line[:prefixWidth]
-		message = line[prefixWidth:]
+	var message string
+	if prefixByteLen < len(line) {
+		message = line[prefixByteLen:]
 	} else {
 		// Line is shorter than or equal to the prefix (no message content)
 		return lipgloss.NewStyle().Width(viewportWidth).Render(line)
@@ -483,7 +490,7 @@ func softWrapIndent(line string, prefixWidth, viewportWidth int) string {
 	wrapped := ansi.Wrap(message, msgWidth, " ")
 	msgLines := strings.Split(wrapped, "\n")
 
-	indent := strings.Repeat(" ", prefixWidth)
+	indent := strings.Repeat(" ", indentCols)
 	var sb strings.Builder
 	for j, ml := range msgLines {
 		if j == 0 {
@@ -500,17 +507,16 @@ func softWrapIndent(line string, prefixWidth, viewportWidth int) string {
 func (m *LogcatViewModel) Render() {
 	var b strings.Builder
 	logs := m.log.All()
-	cols := m.outputPrefs.Columns
 	m.visualLineToLogLine = m.visualLineToLogLine[:0]
 	m.logLineVisualStart = m.logLineVisualStart[:0]
 	m.logLineColor = m.logLineColor[:0]
 	for i, logLine := range logs {
 		m.logLineVisualStart = append(m.logLineVisualStart, len(m.visualLineToLogLine))
 		m.logLineColor = append(m.logLineColor, theme.GetLogColor(logLine.Level))
-		line := logLine.ModifiedString(cols)
+		line := logLine.ModifiedString(m.outputPrefs)
 		var content string
 		if m.outputPrefs.SoftWrap {
-			content = softWrapIndent(line, logLine.PrefixWidth(cols), m.viewport.Width())
+			content = softWrapIndent(line, logLine.PrefixWidth(m.outputPrefs), m.viewport.Width())
 		} else {
 			content = line
 		}
@@ -692,13 +698,13 @@ func (m *LogcatViewModel) handleVisualModeKey(key string) updateResult {
 				var lines []string
 				logs := m.log.Recent(m.log.Size() - start)
 				for i := 0; i <= end-start; i++ {
-					lines = append(lines, strings.TrimSpace(logs[i].ModifiedString(m.outputPrefs.Columns)))
+					lines = append(lines, strings.TrimSpace(logs[i].ModifiedString(m.outputPrefs)))
 				}
 				err = util.CopyToClipboard(lines...)
 				m.startSelected = -1
 			} else {
 				logs := m.log.Recent(m.log.Size() - m.currentLine)
-				lineText := strings.TrimSpace(logs[0].ModifiedString(m.outputPrefs.Columns))
+				lineText := strings.TrimSpace(logs[0].ModifiedString(m.outputPrefs))
 				err = util.CopyToClipboard(lineText)
 			}
 			toastCmd := m.toast.Show("Copied to clipboard", tui.ToastInfo)
@@ -753,20 +759,19 @@ func (m *LogcatViewModel) selectedLines() []string {
 		return nil
 	}
 
-	cols := m.outputPrefs.Columns
 	if m.startSelected >= 0 {
 		start := min(m.currentLine, m.startSelected)
 		end := max(m.currentLine, m.startSelected)
 		logs := m.log.Recent(m.log.Size() - start)
 		lines := make([]string, 0, end-start+1)
 		for i := 0; i <= end-start; i++ {
-			lines = append(lines, strings.TrimSpace(logs[i].ModifiedString(cols)))
+			lines = append(lines, strings.TrimSpace(logs[i].ModifiedString(m.outputPrefs)))
 		}
 		return lines
 	}
 
 	logs := m.log.Recent(m.log.Size() - m.currentLine)
-	return []string{strings.TrimSpace(logs[0].ModifiedString(cols))}
+	return []string{strings.TrimSpace(logs[0].ModifiedString(m.outputPrefs))}
 }
 
 func (m *LogcatViewModel) ensureLineVisible() {
@@ -1001,7 +1006,7 @@ func (m *LogcatViewModel) exportBuffer() tea.Cmd {
 
 	var sb strings.Builder
 	for _, l := range lines {
-		sb.WriteString(strings.TrimSpace(l.ModifiedString(m.outputPrefs.Columns)))
+		sb.WriteString(strings.TrimSpace(l.ModifiedString(m.outputPrefs)))
 		sb.WriteByte('\n')
 	}
 
@@ -1040,7 +1045,7 @@ func (m *LogcatViewModel) stopRecording() tea.Cmd {
 
 	var sb strings.Builder
 	for _, l := range recorded {
-		sb.WriteString(strings.TrimSpace(l.ModifiedString(m.outputPrefs.Columns)))
+		sb.WriteString(strings.TrimSpace(l.ModifiedString(m.outputPrefs)))
 		sb.WriteByte('\n')
 	}
 

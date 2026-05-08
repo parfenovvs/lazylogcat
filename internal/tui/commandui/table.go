@@ -3,7 +3,6 @@ package commandui
 import (
 	"charm.land/bubbles/v2/table"
 	"charm.land/bubbles/v2/textinput"
-	"github.com/charmbracelet/x/ansi"
 
 	"github.com/parfenovvs/lazylogcat/internal/tui"
 	"github.com/parfenovvs/lazylogcat/internal/tui/theme"
@@ -38,25 +37,6 @@ func newTable(columns []table.Column, rows []table.Row, height int) table.Model 
 	t.SetStyles(s)
 
 	return t
-}
-
-func truncateMiddle(s string, maxWidth int) string {
-	w := ansi.StringWidth(s)
-	if w <= maxWidth {
-		return s
-	}
-	left := (maxWidth - 1) / 2
-	right := maxWidth - 1 - left
-
-	runes := []rune(s)
-	var suffix string
-	suffixW := 0
-	for i := len(runes) - 1; i >= 0 && suffixW < right; i-- {
-		suffixW++
-		suffix = string(runes[i]) + suffix
-	}
-
-	return ansi.Truncate(s, left, "") + "…" + suffix
 }
 
 func newSearchInput() textinput.Model {

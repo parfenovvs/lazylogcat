@@ -199,6 +199,31 @@ func TestWrapFromConfig(t *testing.T) {
 	}
 }
 
+func intPtr(v int) *int { return &v }
+
+func TestTagWidthFromConfig(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  config.Config
+		want int
+	}{
+		{name: "NilDefaultsZero", cfg: config.Config{}, want: 0},
+		{name: "ZeroExplicit", cfg: config.Config{Display: config.Display{TagWidth: intPtr(0)}}, want: 0},
+		{name: "InRange", cfg: config.Config{Display: config.Display{TagWidth: intPtr(42)}}, want: 42},
+		{name: "Max", cfg: config.Config{Display: config.Display{TagWidth: intPtr(MaxTagWidth)}}, want: MaxTagWidth},
+		{name: "NegativeClampedToZero", cfg: config.Config{Display: config.Display{TagWidth: intPtr(-1)}}, want: 0},
+		{name: "AboveMaxClamped", cfg: config.Config{Display: config.Display{TagWidth: intPtr(1000)}}, want: MaxTagWidth},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := TagWidthFromConfig(&tt.cfg)
+			if got != tt.want {
+				t.Errorf("TagWidthFromConfig() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestColumnsFromConfig(t *testing.T) {
 	tests := []struct {
 		name string

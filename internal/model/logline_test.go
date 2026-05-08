@@ -340,7 +340,7 @@ func TestPrefixWidth(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := tt.line.PrefixWidth(tt.cols)
+			got := tt.line.PrefixWidth(OutputPrefs{Columns: tt.cols})
 			if got != tt.want {
 				t.Errorf("PrefixWidth() = %d, want %d", got, tt.want)
 			}
@@ -366,8 +366,9 @@ func TestPrefixWidth_MatchesModifiedString(t *testing.T) {
 
 	for _, tc := range colSets {
 		t.Run(tc.name, func(t *testing.T) {
-			pw := line.PrefixWidth(tc.cols)
-			full := line.ModifiedString(tc.cols)
+			prefs := OutputPrefs{Columns: tc.cols}
+			pw := line.PrefixWidth(prefs)
+			full := line.ModifiedString(prefs)
 			if pw == 0 {
 				return // No prefix columns, nothing to check
 			}
@@ -381,5 +382,111 @@ func TestPrefixWidth_MatchesModifiedString(t *testing.T) {
 					msgPart, line.Message, full, pw)
 			}
 		})
+	}
+}
+
+func TestModifiedString_TagWidth(t *testing.T) {
+	line := ParseLogLine("02-08 12:12:09.629  3950  4005 D Short: hi")
+	longTag := ParseLogLine("02-08 12:12:09.629  3950  4005 D VeryLongTagHere: there")
+
+	tests := []struct {
+		name  string
+		line  LogLine
+		prefs OutputPrefs
+		want  string
+	}{
+		{
+			name: "AutoWidth_Unchanged",
+			line: line,
+			prefs: OutputPrefs{
+				Columns:  Columns{Tag: true, Message: true},
+				TagWidth: 0,
+			},
+			want: "Short: hi",
+		},
+		{
+			name: "PadShortTag",
+			line: line,
+			prefs: OutputPrefs{
+				Columns:  Columns{Tag: true, Message: true},
+				TagWidth: 10,
+			},
+			want: "Short     : hi",
+		},
+		{
+			name: "TruncateLongTag",
+			line: longTag,
+			prefs: OutputPrefs{
+				Columns:  Columns{Tag: true, Message: true},
+				TagWidth: 8,
+			},
+			want: "Ver…Here: there",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.line.ModifiedString(tt.prefs)
+			if got != tt.want {
+				t.Errorf("ModifiedString() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestModifiedString_TagWidth_Runes(t *testing.T) {
+	raw := "02-08 12:12:09.629  3950  4005 D 日本語: ok"
+	line := ParseLogLine(raw)
+	prefs := OutputPrefs{
+		Columns:  Columns{Tag: true, Message: true},
+		TagWidth: 2,
+	}
+	got := line.ModifiedString(prefs)
+	want := "日…: ok"
+	if got != want {
+		t.Errorf("ModifiedString() = %q, want %q", got, want)
+	}
+}
+
+func TestModifiedString_TagWidth_NarrowTruncate(t *testing.T) {
+	long := ParseLogLine("02-08 12:12:09.629  3950  4005 D Abcde: msg")
+	t.Run("Width1_firstRune", func(t *testing.T) {
+		got := long.ModifiedString(OutputPrefs{
+			Columns:  Columns{Tag: true, Message: true},
+			TagWidth: 1,
+		})
+		want := "A: msg"
+		if got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	})
+	t.Run("Width2_firstRuneAndEllipsis", func(t *testing.T) {
+		got := long.ModifiedString(OutputPrefs{
+			Columns:  Columns{Tag: true, Message: true},
+			TagWidth: 2,
+		})
+		want := "A…: msg"
+		if got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	})
+}
+
+func TestPrefixWidth_MatchesModifiedString_TagWidth(t *testing.T) {
+	line := ParseLogLine("02-08 12:12:09.629  3950  4005 D BusinessScope: padded message text")
+	prefs := OutputPrefs{
+		Columns:  Columns{Tag: true, Message: true},
+		TagWidth: 6,
+	}
+	pw := line.PrefixWidth(prefs)
+	full := line.ModifiedString(prefs)
+	if pw > len(full) {
+		t.Fatalf("PrefixWidth(%d) > len(ModifiedString)(%d)", pw, len(full))
+	}
+	if got := full[pw:]; got != line.Message {
+		t.Errorf("full[PrefixWidth:] = %q, want %q (full=%q)", got, line.Message, full)
+	}
+	if want := "Bu…ope: padded message text"; full != want {
+		t.Errorf("ModifiedString() = %q, want %q", full, want)
 	}
 }

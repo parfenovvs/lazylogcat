@@ -18,9 +18,10 @@ type Config struct {
 
 // Display holds user preferences for log output appearance.
 type Display struct {
-	Color   *bool    `json:"color,omitempty"`
-	Wrap    *bool    `json:"wrap,omitempty"`
-	Columns *Columns `json:"columns,omitempty"`
+	Color    *bool    `json:"color,omitempty"`
+	Wrap     *bool    `json:"wrap,omitempty"`
+	TagWidth *int     `json:"tag_width,omitempty"`
+	Columns  *Columns `json:"columns,omitempty"`
 }
 
 // Columns controls which fields of a parsed log line are visible.
@@ -198,7 +199,7 @@ func loadFile(path string) (Config, error) {
 // Strings: non-empty overlay replaces base.
 // Slices: non-nil overlay replaces base entirely ([] explicitly clears).
 // TextFilter: non-zero overlay replaces base.
-// *bool: non-nil overlay replaces base.
+// *bool, *int: non-nil overlay replaces base.
 func merge(base, overlay Config) Config {
 	result := base
 
@@ -208,6 +209,9 @@ func merge(base, overlay Config) Config {
 	}
 	if overlay.Display.Wrap != nil {
 		result.Display.Wrap = overlay.Display.Wrap
+	}
+	if overlay.Display.TagWidth != nil {
+		result.Display.TagWidth = overlay.Display.TagWidth
 	}
 	if overlay.Display.Columns != nil {
 		if result.Display.Columns != nil {

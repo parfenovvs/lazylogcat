@@ -11,6 +11,7 @@ const (
 
 	// Style
 	CommandOutput
+	CommandTagWidth
 
 	// Connection
 	CommandReconnect
@@ -58,6 +59,7 @@ func Commands() []CommandGroup {
 			Name: "Style",
 			Commands: []CommandData{
 				{Command: CommandOutput, Type: CommandTypeNavigation, Name: "Output", Shortcut: "ctrl+x o"},
+				{Command: CommandTagWidth, Type: CommandTypeNavigation, Name: "Tag width"},
 			},
 		},
 		{
