@@ -212,7 +212,7 @@ func (m LogcatViewModel) Update(msg tea.Msg) (LogcatViewModel, tea.Cmd) {
 		headerHeight := lipgloss.Height(m.headerView())
 		footerHeight := lipgloss.Height(m.footerView())
 		m.viewport.SetWidth(m.parentSize.Width)
-		m.viewport.SetHeight(m.parentSize.Height - footerHeight - headerHeight - 1)
+		m.viewport.SetHeight(m.parentSize.Height - footerHeight - headerHeight)
 		needsRender = true
 
 	case commandui.CommandDialogCloseMsg:
@@ -786,7 +786,7 @@ func (m *LogcatViewModel) ensureLineVisible() {
 	}
 
 	viewportTop := m.viewport.YOffset()
-	viewportBottom := viewportTop + m.viewport.Height() - 1
+	viewportBottom := viewportTop + m.viewport.Height()
 	if lineTop < viewportTop {
 		m.viewport.SetYOffset(lineTop)
 	} else if lineBottom > viewportBottom {
